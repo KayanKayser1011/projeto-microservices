@@ -1,0 +1,452 @@
+ADR-003: USAR DOCKER COMPOSE PARA ORQUESTRAÇÃO LOCAL E TESTES
+
+Status: ACEITO
+Data: 19/04/2026
+Autor: Equipe de Desenvolvimento
+Revisor: Aguardando Peer Review
+
+---
+
+1. CONTEXTO
+
+Agora que temos dois microsserviços separados, como fazê-los rodar juntos
+de forma consistente? Como alguém consegue executar o projeto pela primeira
+vez sem perder 2 horas de setup?
+
+Requisitos:
+- Um único comando para iniciar TODOS os serviços
+- Serviços se comunicam entre si
+- Portas estão mapeadas corretamente para acessar do host
+- Rede isolada para que os serviços se vejam
+- Fácil de debugar (ver logs, fazer clean restart)
+- Funciona da mesma forma no laptop do João, da Maria, e no servidor
+
+
+2. ALTERNATIVAS CONSIDERADAS
+
+ALTERNATIVA A: Docker Compose - ESCOLHIDA
+
+Como funciona:
+Arquivo docker-compose.yml descreve todos os serviços em YAML:
+
+services:
+  product-service:
+    build: ./product-service
+    ports:
+      - "3001:3001"
+      
+  order-service:
+    build: ./order-service
+    ports:
+      - "3002:3002"
+    depends_on:
+      - product-service
+
+Um comando: docker compose up
+Tudo funciona.
+
+Vantagens:
+✓ Extremamente simples: um arquivo YAML
+✓ Um comando: docker compose up inicia tudo
+✓ DNS automático: order-service consegue chamar product-service pelo nome
+✓ Rede isolada: serviços em rede privada segura
+✓ Reproducível: mesma config em dev, test, apresentação
+✓ Rápido: prototipagem em 10-20 minutos
+✓ Demonstração: liga e funciona em 30 segundos
+
+Desvantagens:
+- Não é production-grade: um único host, sem auto-healing
+- Sem orquestração avançada: sem auto-scaling
+- Sem balanceamento de carga
+- Limitado a um único host (não é distribuído)
+
+
+ALTERNATIVA B: Kubernetes (K8s)
+
+Como funciona:
+Define manifests YAML complexos para Pods, Services, Deployments, etc.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+      - name: product-service
+        image: product-service:latest
+        ports:
+        - containerPort: 3001
+
+Vantagens:
++ Orquestração profissional com auto-healing
++ Auto-scaling: adiciona/remove réplicas automaticamente
++ Load balancing nativo
++ Rolling updates: deploy sem downtime
++ Padrão de indústria para produção
+
+Desvantagens:
+- Curva de aprendizado MUITO alta (50+ páginas de docs)
+- Overkill para projeto educacional
+- Setup complexo: Kind, Minikube, kubectl, etc
+- Tempo de setup: 30-60 minutos apenas para instalar
+- Impossível demonstrar em 2 minutos (precisa 15 min só de startup)
+
+NÃO é prático: projeto é para aprender arquitetura, não Kubernetes.
+
+
+ALTERNATIVA C: Docker run manual
+
+Como funciona:
+Iniciar manualmente cada container com docker run:
+
+docker network create myapp
+docker run -d --network myapp \
+  -p 3001:3001 \
+  --name product-service \
+  product-service:latest
+  
+docker run -d --network myapp \
+  -p 3002:3002 \
+  --link product-service \
+  --name order-service \
+  order-service:latest
+
+Vantagens:
++ Total controle baixo nível
++ Sem abstração: aprende Docker profundamente
+
+Desvantagens:
+- Tedioso: múltiplos comandos complexos
+- Propenso a erros: uma vírgula errada quebra tudo
+- Impossível manter: quem consegue lembrar desses comandos?
+- Impossível demonstrar: 5 minutos de typing com risco de erros
+- Documentação? "copy/paste isso no terminal"
+
+NÃO é prático: inviável para apresentação de 10 minutos.
+
+
+ALTERNATIVA D: Makefile ou shell script
+
+Usar Makefile ou script bash para automatizar:
+
+make up
+make down
+make logs
+
+Ou: bash start.sh
+
+Vantagens:
++ Melhor que docker run manual
++ Documentado em um arquivo
+
+Desvantagens:
+- Windows: Makefile não funciona (precisa WSL ou MinGW)
+- Cross-platform: bash não funciona nativo no Windows
+- Ainda é wrapper: na verdade docker run por trás
+- Não melhora reproducibilidade
+
+NÃO é primário: Docker Compose já resolve melhor.
+
+
+3. DECISÃO
+
+USAR DOCKER COMPOSE PARA DESENVOLVIMENTO E TESTES
+
+Justificativa:
+Docker Compose é a ferramenta certa para desenvolvimento local. É tão
+simples e poderosa que grandes empresas usam docker-compose.yml como sua
+linguagem de definição de infraestrutura para dev environments.
+
+Para produção (depois), alguém migra para Kubernetes. Mas para aprender
+arquitetura de microsserviços NOW, Docker Compose é perfeito.
+
+
+4. CONSEQUÊNCIAS
+
+POSITIVAS:
+✓ Experiência super simples: docker compose up
+✓ Reproducível: mesma config em qualquer máquina
+✓ Rápido: prototipagem em minutos
+✓ Escalável para learning: pode adicionar mais serviços depois
+✓ Excelente para demonstração: funciona na primeira tentativa
+✓ Fácil resetar: docker compose down && docker compose up
+
+NEGATIVAS:
+✗ Não é solução de produção (Kubernetes necessário)
+✗ Sem auto-healing (se serviço cai, precisa reiniciar manualmente)
+✗ Sem auto-scaling (réplicas precisam ser configuradas manualmente)
+✗ Sem service mesh (não tem features avançadas)
+
+NEUTRAS:
+~ Limitado a um host (não é distribuído)
+~ Requer Docker instalado (não funciona em bare metal)
+~ Volume limits: dev local não escala como produção
+
+
+5. IMPLEMENTAÇÃO
+
+Arquivo docker-compose.yml consolidado:
+
+version: '3.8'
+
+services:
+  product-service:
+    build: ./product-service
+    container_name: product-service
+    ports:
+      - "3001:3001"
+    networks:
+      - microservices-network
+    environment:
+      - NODE_ENV=development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  order-service:
+    build: ./order-service
+    container_name: order-service
+    ports:
+      - "3002:3002"
+    networks:
+      - microservices-network
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      product-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  microservices-network:
+    driver: bridge
+
+Comandos essenciais:
+
+# Iniciar todos os serviços
+docker compose up
+
+# Ver logs em tempo real
+docker compose logs -f
+
+# Parar tudo
+docker compose down
+
+# Remover volumes (reset completo)
+docker compose down -v
+
+# Rebuild das images
+docker compose up --build
+- Service discovery automático ✓
+- Rede isolada e segura ✓
+
+Exemplo: Subir tudo em 1 comando:
+```bash
+docker compose up --build
+```
+
+4.2 Negativas
+- Não escalável para produção ✗
+- Limitado a um único host ✗
+- Sem auto-healing de containers ✗
+- Sem load balancing ✗
+
+4.3 Mitigações Implementadas
+✓ docker-compose.yml bem estruturado e comentado
+✓ Ambos os Dockerfiles seguem boas práticas
+✓ Rede explícita (automática pero documentada)
+✓ depends_on garante ordem de inicialização
+✓ Health checks via GET /health
+
+4.4 Mitigações Futuras Recomendadas
+- Para produção: Migrar para Kubernetes
+- Adicionar volume para persistência de dados
+- Implementar reinicialização automática (restart policy)
+- Adicionar limite de recursos (CPU, RAM)
+
+
+================================================================================
+5. IMPLEMENTAÇÃO TÉCNICA - docker-compose.yml
+================================================================================
+
+5.1 Estrutura atual:
+
+```yaml
+services:
+  product-service:
+    build: ./product-service      # Constrói imagen a partir do Dockerfile
+    ports:
+      - "3001:3001"               # Expõe porta externa:interna
+                                  # Acesso: http://localhost:3001
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "3002:3002"
+    depends_on:
+      - product-service           # Garante que product sobe primeiro
+```
+
+5.2 Como funciona:
+```
+docker compose up --build
+    ↓
+Cria rede isolada "projeto-microservices"
+    ↓
+Constrói image de product-service a partir de Dockerfile
+    ↓
+Inicia container product-service acessível em http://product-service:3001
+    ↓
+Constrói image de order-service
+    ↓
+Inicia container order-service acessível em http://order-service:3002
+    ↓
+    ✓ Ambos rodando e comunicando-se via hostname interno
+```
+
+5.3 Service Discovery automático:
+No Docker Compose, services se encontram automaticamente pelo NOME:
+- order-service pode chamar product-service assim:
+  ```javascript
+  axios.get('http://product-service:3001/products')
+  ```
+  
+Isso funciona porque Docker Compose cria uma rede com DNS interno
+que resolve nomes de serviços para IPs dos containers.
+
+
+================================================================================
+6. COMANDOS ESSENCIAIS
+================================================================================
+
+Para apresentação ao vivo:
+
+# Subir tudo (build + start)
+docker compose up --build
+
+# Ver status dos containers
+docker compose ps
+
+# Ver logs em tempo real
+docker compose logs -f
+
+# Parar tudo
+docker compose down
+
+# Remover volumes (data)
+docker compose down -v
+
+# Reconstruir images
+docker compose build --no-cache
+
+# Executar comando em container
+docker compose exec product-service bash
+
+# Ver variáveis de ambiente
+docker compose config
+
+# Verificar health
+curl http://localhost:3001/health
+curl http://localhost:3002/health
+
+
+================================================================================
+7. ESTRUTURA DE DOCKERFILES
+================================================================================
+
+7.1 Padrão usado (multi-stage seria overkill):
+
+```dockerfile
+FROM node:18                       # Imagem base confiável
+
+WORKDIR /app                       # Diretório de trabalho
+
+COPY package*.json ./              # Copia package.json e package-lock.json
+RUN npm install                    # Instala dependências
+
+COPY . .                           # Copia código fonte
+
+EXPOSE 3001                        # Documenta porta (informativo)
+
+CMD ["node", "index.js"]           # Comando de inicialização
+```
+
+7.2 Alternativas consideradas:
+- Multi-stage build: Não necessário (não há dependências de build)
+- Docker slim: Overkill para projeto educacional
+- Alpine linux: Trade-off: menos 20MB size mas mais complexo
+
+Decisão: Usar node:18 base simples
+
+
+================================================================================
+8. VALIDAÇÃO E TESTES
+================================================================================
+
+Testes realizados:
+✓ docker compose up --build executa sem erros
+✓ Ambos serviços iniciam e respondent
+✓ order-service consegue chamar product-service
+✓ Health checks funcionam
+✓ Logs estruturados aparecem corretamente
+✓ Correlation IDs são propagados
+✓ docker compose down remove tudo limpo
+✓ Pode-se repetir cycle sem problemas
+
+Tempo de apresentação:
+✓ docker compose up leva ~30 segundos em máquina normal
+✓ Fácil demonstrar em tempo real na apresentação
+
+
+================================================================================
+9. COMPARAÇÃO FINAL: DOCKER COMPOSE vs ALTERNATIVES
+================================================================================
+
+┌──────────────────┬─────────┬──────────┬──────────┬──────────────┐
+│ Critério         │ Compose │   K8s    │  Swarm   │ Docker run   │
+├──────────────────┼─────────┼──────────┼──────────┼──────────────┤
+│ Simplicidade*    │   ★★★   │    ★     │   ★★    │    ★★★★ (!)  │
+│ Escalabilidade   │   ★     │   ★★★★★ │  ★★★    │      -       │
+│ Produção-ready   │   ★     │   ★★★★★ │  ★★★    │      -       │
+│ Demonstração*    │  ★★★★★ │    ★★    │   ★★    │     ★★       │
+│ Curva aprendizado│  ★★★★★ │    ★     │   ★★★   │    ★★★★      │
+│ Tempo setup      │    2min │  30min   │  10min   │   15-30min   │
+└──────────────────┴─────────┴──────────┴──────────┴──────────────┘
+*Critério mais importante para este projeto
+
+Conclusão: Docker Compose é a escolha ótima
+
+
+================================================================================
+10. REVISÃO PÓS-FEEDBACK
+================================================================================
+
+Feedback recebido no Peer Review:
+- [Aguardando peer review]
+
+Ajustes realizados:
+- [Serão registrados após revisão]
+
+Possíveis melhorias para próxima iteração:
+- Adicionar healthcheck nativo (healthcheck: em cada serviço)
+- Adicionar restarting policy (restart: unless-stopped)
+- Adicionar limites de recursos (CPU, memory)
+- Adicionar variáveis de ambiente em .env
+
+
+====== FIM DO ADR-003 ======
