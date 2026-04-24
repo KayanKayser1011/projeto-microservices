@@ -133,8 +133,7 @@ app.get('/', (req, res) => {
                     <h2>Como Testar</h2>
                     <p>Use curl para criar um pedido:</p>
                     <div class="endpoint">
-                        curl -X POST http://localhost:3002/orders\\
-  -H "Content-Type: application/json"
+                        curl -X POST http://localhost:3002/orders
                     </div>
                 </div>
 
