@@ -1,14 +1,14 @@
 ADR-001: USAR COMUNICAÇÃO SÍNCRONA (HTTP/REST) ENTRE MICROSSERVIÇOS
 
 Status: ACEITO
-Data: 19/04/2026
+Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
 ---
 
 1. CONTEXTO
 
-Em microsserviços, Order Service precisa consultar Product Service para validar produtos ao criar pedidos.
+No sistema de gerenciamento de demandas, Deadline Checker Service precisa consultar Demand Service para obter lista de demandas ativas e verificar prazos.
 
 Alternativas principais:
 - Síncrona: chama e espera resposta (como função normal)
@@ -17,36 +17,92 @@ Alternativas principais:
 
 Cada opção tem prós e contras diferentes.
 
-
 2. ALTERNATIVAS CONSIDERADAS
 
 ALTERNATIVA A: Comunicação Síncrona (HTTP/REST) - ESCOLHIDA
 
 Como funciona:
-- Order Service faz GET /products para Product Service
-- Espera resposta antes de continuar
+- Deadline Checker faz GET /demands para Demand Service
+- Espera resposta antes de processar verificações
 - Resposta é imediata ou erro
 
 Vantagens:
 + Simples: HTTP que todos conhecem
 + Debug fácil: testar com curl
-+ Resposta rápida ao cliente
-+ Sem infraestrutura extra
++ Resposta rápida para verificações automáticas
++ Sem infraestrutura extra de mensageria
 
 Desvantagens:
-- Acoplamento: se Product cai, Order falha
-- Cascata de falhas: atraso em Product afeta Order
-- Latência maior: cada chamada adiciona tempo
+- Acoplamento: se Demand cai, Deadline Checker falha
+- Cascata de falhas: indisponibilidade em Demand afeta alertas
+- Latência maior: cada verificação adiciona tempo de rede
 
 Quando usar: respostas imediatas críticas, alta disponibilidade esperada, volume pequeno/médio
-
 
 ALTERNATIVA B: Comunicação Assíncrona (Message Queue)
 
 Como funciona:
-- Order publica "pedido criado" em fila (RabbitMQ/Kafka)
-- Order responde cliente imediatamente
-- Product processa mensagem quando consegue
+- Demand publica "demanda criada/atualizada" em fila
+- Deadline Checker consome mensagens quando consegue
+- Processamento desacoplado
+
+Vantagens:
++ Desacoplamento: serviços independentes
++ Resiliente: falha em um não para o outro
++ Escalável: processar em lotes
+
+Desvantagens:
+- Complexo: infraestrutura de fila necessária
+- Debug difícil: rastrear mensagens
+- Eventual consistência: dados não sempre atuais
+- Overhead: serialização/deserialização
+
+Quando usar: alta disponibilidade crítica, volume alto, tolerância a latência
+
+ALTERNATIVA C: Banco Compartilhado
+
+Como funciona:
+- Ambos serviços acessam mesma tabela de demandas
+- Deadline Checker consulta diretamente o DB
+
+Vantagens:
++ Simples: sem comunicação entre serviços
++ Performance: acesso direto ao DB
++ Consistência: dados sempre atuais
+
+Desvantagens:
+- Acoplamento forte: mudança em DB afeta ambos
+- Escalabilidade limitada: DB como gargalo
+- Monolito disfarçado: difícil evoluir separadamente
+
+Quando usar: protótipos, sistemas pequenos, quando consistência é prioridade absoluta
+
+3. DECISÃO
+
+Escolhemos ALTERNATIVA A (Comunicação Síncrona) porque:
+
+- Sistema é pequeno/médio volume
+- Verificações são críticas e precisam ser confiáveis
+- Simplicidade de desenvolvimento e operação
+- Equipe já conhece HTTP/REST
+- Docker Compose facilita testes locais
+
+4. CONSEQUÊNCIAS
+
+Positivas:
+- Desenvolvimento rápido
+- Fácil testar e debugar
+- Sem dependências externas
+
+Negativas:
+- Risco de cascata de falhas
+- Latência de rede em verificações
+
+Mitigações:
+- Timeouts curtos (5s)
+- Circuit breaker pode ser adicionado futuramente
+- Health checks em Docker Compose
+- Logs estruturados com Correlation ID para rastreamento
 
 Vantagens:
 + Desacoplado: Product pode estar down

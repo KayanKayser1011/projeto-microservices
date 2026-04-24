@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
-  product-service:
-    build: 
-      context: ./product-service
+  demand-service:
+    build:
+      context: ./demand-service
       dockerfile: Dockerfile
-    container_name: product-service
+    container_name: demand-service
     ports:
       - "3001:3001"
     environment:
@@ -21,20 +19,24 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  order-service:
+  deadline-checker-service:
     build:
-      context: ./order-service
+      context: ./deadline-checker-service
       dockerfile: Dockerfile
-    container_name: order-service
+    container_name: deadline-checker-service
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=development
       - PORT=3002
+    volumes:
+      - deadline-checker-data:/app/data
     networks:
       - microservices-net
     depends_on:
-      product-service:
+      demand-service:
+        condition: service_healthy
+      email-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
@@ -44,6 +46,61 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  email-service:
+    build:
+      context: ./email-service
+      dockerfile: Dockerfile
+    container_name: email-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - EMAIL_FROM=${EMAIL_FROM:-alerts@company.com}
+      - EMAIL_TO=${EMAIL_TO:-alerts@company.com}
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  ui-service:
+    build:
+      context: ./ui-service
+      dockerfile: Dockerfile
+    container_name: ui-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    networks:
+      - microservices-net
+    depends_on:
+      - demand-service
+      - deadline-checker-service
+      - email-service
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
 networks:
   microservices-net:
     driver: bridge
+
+volumes:
+  deadline-checker-data:
+    driver: local

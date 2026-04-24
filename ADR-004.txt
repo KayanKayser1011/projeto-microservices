@@ -1,0 +1,140 @@
+ADR-004: USAR SQLITE PARA PERSISTÊNCIA DE LOGS NO DEADLINE CHECKER SERVICE
+
+Status: ACEITO
+Data: 24/04/2026
+Autor: Equipe de Desenvolvimento
+
+---
+
+1. CONTEXTO
+
+O Deadline Checker Service precisa armazenar logs de verificações e alertas enviados. Como persistir dados estruturados de forma simples e confiável em container?
+
+Requisitos: persistência entre restarts, consultas rápidas, estrutura relacional, fácil backup, sem dependências externas.
+
+2. ALTERNATIVAS CONSIDERADAS
+
+ALTERNATIVA A: SQLite com better-sqlite3 - ESCOLHIDA
+
+Arquivo SQLite local no container, com volume Docker para persistência.
+
+Vantagens:
+✓ Zero configuração: arquivo único
+✓ SQL completo: consultas complexas
+✓ Transações ACID: dados consistentes
+✓ Volume Docker: sobrevive restarts
+✓ Sem servidor: não precisa gerenciar
+✓ Backup simples: copiar arquivo
+
+Desvantagens:
+- Concorrência limitada: um writer por vez
+- Não distribuído: dados locais ao container
+
+ALTERNATIVA B: PostgreSQL/MySQL separado
+
+Container dedicado de banco de dados.
+
+Vantagens:
++ Concorrência alta
++ Distribuição possível
++ Ferramentas avançadas
+
+Desvantagens:
+- Mais complexidade: gerenciar 2 containers
+- Recursos extras: CPU/RAM para DB
+- Setup mais lento: inicialização sequencial
+- Overkill para logs simples
+
+NÃO escolhido: complexidade desnecessária.
+
+ALTERNATIVA C: Arquivos JSON/CSV
+
+Salvar logs em arquivos texto.
+
+Vantagens:
++ Simples implementar
++ Legível humano
+
+Desvantagens:
+- Consultas limitadas: grep/sed
+- Sem transações: risco de corrupção
+- Performance ruim com muitos logs
+- Sem relacionamentos
+
+NÃO recomendado: não escalável.
+
+ALTERNATIVA D: Redis/Memcached
+
+Cache em memória com persistência opcional.
+
+Vantagens:
++ Performance alta
++ Estruturas de dados ricas
+
+Desvantagens:
+- Dados voláteis por padrão
+- Não relacional: difícil consultas
+- Dependência externa
+
+NÃO adequado: dados precisam persistir.
+
+3. DECISÃO
+
+USAR SQLITE COM BETTER-SQLITE3 PARA LOGS
+
+Justificativa:
+SQLite é perfeito para dados locais estruturados. better-sqlite3 oferece performance e API síncrona ideal para Node.js. Volume Docker garante persistência.
+
+4. CONSEQUÊNCIAS
+
+Positivas:
+- Persistência confiável de logs
+- Consultas SQL para análise
+- Backup/restauração simples
+- Sem dependências externas
+
+Negativas:
+- Concorrência limitada (não problema aqui)
+- Dados locais ao container
+
+Mitigações:
+- Volume Docker nomeado
+- Estrutura de tabelas bem definida
+- Índices para performance
+
+5. IMPLEMENTAÇÃO
+
+Schema SQLite:
+
+```sql
+CREATE TABLE check_logs (
+    id TEXT PRIMARY KEY,
+    demand_id TEXT,
+    title TEXT,
+    status TEXT,
+    deadline TEXT,
+    days_remaining INTEGER,
+    alert_type TEXT,
+    message TEXT,
+    checked_at TEXT,
+    correlation_id TEXT
+);
+
+CREATE TABLE alert_logs (
+    id TEXT PRIMARY KEY,
+    demand_id TEXT,
+    type TEXT,
+    message TEXT,
+    sent_at TEXT,
+    correlation_id TEXT
+);
+```
+
+Docker Compose volume:
+```yaml
+volumes:
+  deadline-checker-data:
+    driver: local
+```
+
+====== FIM DO ADR-004 ======

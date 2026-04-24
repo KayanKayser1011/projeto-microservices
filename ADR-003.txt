@@ -1,17 +1,16 @@
 ADR-003: USAR DOCKER COMPOSE PARA ORQUESTRAÇÃO LOCAL E TESTES
 
 Status: ACEITO
-Data: 19/04/2026
+Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
 ---
 
 1. CONTEXTO
 
-Dois serviços separados, como rodá-los juntos consistentemente? Como garantir que alguém execute tudo com um comando?
+Quatro serviços separados (Demand, Deadline Checker, Email, UI), como rodá-los juntos consistentemente? Como garantir que alguém execute tudo com um comando?
 
 Requisitos: um comando inicia tudo, serviços comunicam, portas mapeadas, rede isolada, fácil debug, funciona em qualquer máquina.
-
 
 2. ALTERNATIVAS CONSIDERADAS
 
@@ -35,7 +34,6 @@ Desvantagens:
 - Sem orquestração avançada
 - Sem load balancing
 
-
 ALTERNATIVA B: Kubernetes (K8s)
 
 Manifests YAML complexos para Pods, Services, Deployments.
@@ -53,10 +51,6 @@ Desvantagens:
 - Tempo setup: 30-60 min apenas instalar
 
 NÃO prático: projeto para aprender arquitetura, não Kubernetes.
-- Impossível demonstrar em 2 minutos (precisa 15 min só de startup)
-
-NÃO é prático: projeto é para aprender arquitetura, não Kubernetes.
-
 
 ALTERNATIVA C: Docker run manual
 
@@ -71,10 +65,8 @@ Desvantagens:
 - Propenso erros: vírgula errada quebra
 - Impossível manter: esquece comandos
 - Impossível demonstrar: 5 min typing com risco
-- Documentação? "copy/paste isso"
 
 NÃO prático: inviável para apresentação.
-
 
 ALTERNATIVA D: Makefile ou shell script
 
@@ -92,7 +84,6 @@ Desvantagens:
 
 NÃO primário: Docker Compose resolve melhor.
 
-
 3. DECISÃO
 
 USAR DOCKER COMPOSE PARA DESENVOLVIMENTO E TESTES
@@ -102,10 +93,9 @@ Docker Compose é ferramenta certa para dev local. Simples e poderosa, grandes e
 
 Para produção, migra para Kubernetes. Mas para aprender arquitetura agora, Docker Compose é perfeito.
 
-
 4. CONSEQUÊNCIAS
 
-POSITIVAS:
+Positivas:
 ✓ Experiência simples: docker compose up
 ✓ Reproduzível: mesma config qualquer máquina
 ✓ Rápido: prototipagem minutos
@@ -113,39 +103,60 @@ POSITIVAS:
 ✓ Excelente demonstração: funciona primeira tentativa
 ✓ Fácil reset: docker compose down && up
 
-NEGATIVAS:
+Negativas:
 ✗ Não production: sem auto-healing
 ✗ Sem auto-scaling
 ✗ Sem load balancing
-
 
 5. IMPLEMENTAÇÃO
 
 Arquivo docker-compose.yml:
 
-version: '3.8'
 services:
-  product-service:
-    build: ./product-service
+  demand-service:
+    build: ./demand-service
     ports: ["3001:3001"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
 
-  order-service:
-    build: ./order-service
+  deadline-checker-service:
+    build: ./deadline-checker-service
     ports: ["3002:3002"]
+    volumes:
+      - deadline-checker-data:/app/data
     depends_on:
-      product-service:
+      demand-service:
+        condition: service_healthy
+      email-service:
         condition: service_healthy
 
+  email-service:
+    build: ./email-service
+    ports: ["3003:3003"]
+    environment:
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+
+  ui-service:
+    build: ./ui-service
+    ports: ["3000:3000"]
+    depends_on:
+      - demand-service
+      - deadline-checker-service
+      - email-service
+
 networks:
-  microservices-network:
+  microservices-net:
     driver: bridge
+
+volumes:
+  deadline-checker-data:
+    driver: local
 
 Comandos:
 docker compose up
 docker compose logs -f
-docker compose down
 docker compose down
 
 # Remover volumes (reset completo)
@@ -153,51 +164,8 @@ docker compose down -v
 
 # Rebuild das images
 docker compose up --build
-- Service discovery automático ✓
-- Rede isolada e segura ✓
 
-Exemplo: Subir tudo em 1 comando:
-```bash
-docker compose up --build
-```
-
-4.2 Negativas
-- Não escalável para produção ✗
-- Limitado a um único host ✗
-- Sem auto-healing de containers ✗
-- Sem load balancing ✗
-
-4.3 Mitigações Implementadas
-✓ docker-compose.yml bem estruturado e comentado
-✓ Ambos os Dockerfiles seguem boas práticas
-✓ Rede explícita (automática pero documentada)
-✓ depends_on garante ordem de inicialização
-✓ Health checks via GET /health
-
-4.4 Mitigações Futuras Recomendadas
-- Para produção: Migrar para Kubernetes
-- Adicionar volume para persistência de dados
-- Implementar reinicialização automática (restart policy)
-- Adicionar limite de recursos (CPU, RAM)
-
-
-5. IMPLEMENTAÇÃO TÉCNICA - docker-compose.yml
-
-5.1 Estrutura atual:
-
-```yaml
-services:
-  product-service:
-    build: ./product-service      # Constrói imagen a partir do Dockerfile
-    ports:
-      - "3001:3001"               # Expõe porta externa:interna
-                                  # Acesso: http://localhost:3001
-
-  order-service:
-    build: ./order-service
-    ports:
-      - "3002:3002"
-    depends_on:
+====== FIM DO ADR-003 ======
       - product-service           # Garante que product sobe primeiro
 ```
 

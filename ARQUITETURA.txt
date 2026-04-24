@@ -1,5 +1,5 @@
 DOCUMENTO DE ARQUITETURA
-Sistema de Gerenciamento de Pedidos e Produtos
+Sistema de Gerenciamento de Demandas
 Projeto Integrador - Arquitetura de Microsserviços
 
 1. CONTEXTO E PROBLEMA
@@ -10,35 +10,42 @@ Monolito: tudo em uma aplicação. Problema: um erro afeta tudo, difícil escala
 
 Microsserviços: cada domínio tem seu próprio serviço, independente para escalar, manter, evoluir.
 
-Domínios: Product (produtos) e Order (pedidos).
-
+Domínios: Demand (demandas), Deadline Checker (verificação prazos), Email (alertas), UI (interface).
 
 2. MAPA DE BOUNDED CONTEXTS
 
-Product Context: gerencia catálogo, estoque, preços.
-- Dados: id, name, price, stock
+Demand Context: gerencia criação, edição, exclusão de demandas.
+- Dados: id, title, description, status, deadline, createdAt
 - Autossuficiente
 
-Order Context: gerencia pedidos.
-- Dados: id, products, createdAt, status
-- Depende de Product para validar produtos
+Deadline Checker Context: verifica prazos, calcula dias úteis, envia alertas.
+- Dados: logs de verificações, logs de alertas (SQLite)
+- Depende de Demand e Email
 
+Email Context: envia alertas por email (SMTP configurável).
+- Dados: configurações SMTP, logs de envio
+- Autossuficiente
+
+UI Context: interface web para usuários.
+- Dados: HTML/CSS/JS estático
+- Depende de todos os outros serviços
 
 3. DIAGRAMA DE SERVIÇOS
 
-Cliente → Order Service (POST /orders) → Product Service (GET /products)
+Cliente → UI Service → Demand Service (CRUD demandas)
+                    → Deadline Checker (GET /logs, POST /check-deadlines)
+                    → Email Service (POST /send-alert via Deadline Checker)
+
+Deadline Checker → Demand Service (GET /demands)
+                → Email Service (POST /send-alert)
 
 Protocolo: HTTP/REST, JSON, Correlation ID no header X-Correlation-ID
-
 
 4. OBJETIVOS DE NÍVEL DE SERVIÇO (SLOs)
 
 Disponibilidade: 99% (7.2h downtime/mês)
-Latência: p50 <100ms, p99 <500ms (Order: p99 <800ms)
+Latência: p50 <100ms, p99 <500ms
 Taxa erro: <0.1%
-
-Order tem latência maior porque depende de Product.
-
 
 5. ESTRATÉGIAS DE OBSERVABILIDADE
 
@@ -46,8 +53,9 @@ Logging estruturado JSON com Correlation ID para rastrear requisições.
 
 Health checks: GET /health retorna {"status": "UP"}
 
-Integração futura: ELK, Datadog, CloudWatch
+Persistência: SQLite para logs do Deadline Checker
 
+Integração futura: ELK, Datadog, CloudWatch
 
 6. ESTRATÉGIAS DE SEGURANÇA
 
@@ -59,25 +67,32 @@ Rate limiting futuro
 
 Isolamento rede: Docker rede privada
 
-
 7. PADRÕES IMPLEMENTADOS
 
 Comunicação: Síncrona REST
 
-Resiliência: Health checks, timeout
+Resiliência: Health checks, timeout 5s
 
 Escalabilidade: Stateless services
 
+Persistência: SQLite com volumes Docker
 
 8. ESTRUTURA ATUAL
 
 projeto-microservices/
 ├── docker-compose.yml
-├── product-service/ (Dockerfile, index.js, package.json)
-├── order-service/ (Dockerfile, index.js, package.json)
-├── ARQUITETURA.txt
-├── ADR-001.txt, ADR-002.txt, ADR-003.txt
-├── PEER_REVIEW_CHECKLIST.txt
+├── demand-service/ (porta 3001)
+├── deadline-checker-service/ (porta 3002)
+├── email-service/ (porta 3003)
+├── ui-service/ (porta 3000)
+├── txt/
+│   ├── COMUNICACAO_MICROSERVICOS.txt
+│   ├── ARQUITETURA.txt
+│   ├── GUIA_EXPLICACAO.txt
+│   ├── LEIA_PRIMEIRO.txt
+│   └── PEER_REVIEW_CHECKLIST.txt
+├── ADR-001.txt, ADR-002.txt, ADR-003.txt, ADR-004.txt, ADR-005.txt
+├── README.md
 
 ====== FIM DO DOCUMENTO DE ARQUITETURA ======
 

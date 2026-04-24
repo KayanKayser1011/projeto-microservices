@@ -1,9 +1,24 @@
 const express = require('express');
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
+const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM || 'alerts@company.com';
+const EMAIL_TO = process.env.EMAIL_TO || 'alerts@company.com';
+const useRealEmail = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+const transporter = nodemailer.createTransport({
+    host: SMTP_HOST || 'smtp.example.com',
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined
+});
 
 app.use(express.json());
 
@@ -15,7 +30,7 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
     console.log(JSON.stringify({
-        service: "order-service",
+        service: "email-service",
         correlationId: req.correlationId,
         method: req.method,
         url: req.url,
@@ -31,12 +46,12 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Order Service</title>
+            <title>Email Service</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { 
+                body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
                     min-height: 100vh;
                     display: flex;
                     align-items: center;
@@ -50,8 +65,8 @@ app.get('/', (req, res) => {
                     max-width: 600px;
                     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                 }
-                h1 { color: #f5576c; margin-bottom: 20px; font-size: 28px; }
-                .status { 
+                h1 { color: #4facfe; margin-bottom: 20px; font-size: 28px; }
+                .status {
                     display: inline-block;
                     background: #10b981;
                     color: white;
@@ -72,15 +87,15 @@ app.get('/', (req, res) => {
                     font-family: 'Monaco', 'Courier New', monospace;
                 }
                 a {
-                    color: #f5576c;
+                    color: #4facfe;
                     text-decoration: none;
                     font-weight: 500;
-                    border-bottom: 2px solid #f5576c;
+                    border-bottom: 2px solid #4facfe;
                 }
-                a:hover { color: #f093fb; border-bottom-color: #f093fb; }
+                a:hover { color: #00f2fe; border-bottom-color: #00f2fe; }
                 .endpoint {
                     background: #f9fafb;
-                    border-left: 4px solid #f5576c;
+                    border-left: 4px solid #4facfe;
                     padding: 12px 16px;
                     border-radius: 4px;
                     margin: 8px 0;
@@ -88,12 +103,12 @@ app.get('/', (req, res) => {
                     font-size: 14px;
                 }
                 .correlationId {
-                    background: #dbeafe;
-                    border: 1px solid #0ea5e9;
+                    background: #e0f2fe;
+                    border: 1px solid #0284c7;
                     padding: 12px;
                     border-radius: 6px;
                     font-weight: 500;
-                    color: #0369a1;
+                    color: #0c4a6e;
                     margin-top: 8px;
                 }
                 .note {
@@ -109,37 +124,42 @@ app.get('/', (req, res) => {
         </head>
         <body>
             <div class="container">
-                <h1>🛒 Order Service</h1>
+                <h1>📧 Email Service</h1>
                 <div class="status">✓ Operational</div>
-                
+
                 <div class="section">
                     <h2>O que é?</h2>
-                    <p>Um microsserviço responsável por processar pedidos. Ele se comunica com o Product Service para obter informações dos produtos cadastrados.</p>
+                    <p>Microsserviço responsável por enviar alertas por email sobre prazos de demandas.</p>
                 </div>
-                
+
+                <div class="section">
+                    <h2>Tipos de Alertas</h2>
+                    <ul style="color: #6b7280; line-height: 1.6;">
+                        <li><strong>Warning:</strong> Alerta com 5 dias restantes (envio único)</li>
+                        <li><strong>Urgent:</strong> Alerta urgente com 3 dias ou menos (diário)</li>
+                    </ul>
+                </div>
+
                 <div class="section">
                     <h2>Endpoints Disponíveis</h2>
                     <div class="endpoint">GET /health</div>
                     <p>Verifica o status de saúde do serviço</p>
-                    
-                    <div class="endpoint">POST /orders</div>
-                    <p>Cria um novo pedido consultando os produtos disponíveis</p>
-                    <div class="note">
-                        Tenta conectar automaticamente ao Product Service (porta 3001) para buscar os produtos.
-                    </div>
+
+                    <div class="endpoint">POST /send-alert</div>
+                    <p>Envia um alerta por email</p>
                 </div>
 
                 <div class="section">
-                    <h2>Como Testar</h2>
-                    <p>Use curl para criar um pedido:</p>
-                    <div class="endpoint">
-                        curl -X POST http://localhost:3002/orders
+                    <h2>Como Funciona</h2>
+                    <p>Recebe solicitações do Deadline Checker Service e simula envio de emails.</p>
+                    <div class="note">
+                        Em produção, seria configurado com SMTP real (Gmail, SendGrid, etc.).
                     </div>
                 </div>
 
                 <div class="section">
                     <h2>Rastreabilidade</h2>
-                    <p>Quando você acessa este serviço, um ID único é gerado para rastrear a requisição.</p>
+                    <p>Todas as operações são rastreadas com Correlation ID.</p>
                     <div class="correlationId">
                         <strong>Seu ID de Rastreamento:</strong><br>${req.correlationId}
                     </div>
@@ -148,9 +168,8 @@ app.get('/', (req, res) => {
                 <div class="section">
                     <p>
                         <strong>Fase:</strong> Desenvolvimento Local<br>
-                        <strong>Stack:</strong> Node.js + Express<br>
-                        <strong>Porta:</strong> 3002<br>
-                        <strong>Dependências:</strong> Product Service (localhost:3001)
+                        <strong>Stack:</strong> Node.js + Express + Nodemailer<br>
+                        <strong>Porta:</strong> 3003
                     </p>
                 </div>
             </div>
@@ -163,32 +182,43 @@ app.get('/health', (req, res) => {
     res.json({ status: 'UP' });
 });
 
-app.post('/orders', async (req, res) => {
+app.post('/send-alert', async (req, res) => {
+    const { demandId, type, message, correlationId } = req.body;
+
     try {
-        const response = await axios.get('http://product-service:3001/products', {
-            headers: { 'x-correlation-id': req.correlationId },
-            timeout: 5000
-        });
+        if (useRealEmail) {
+            await transporter.sendMail({
+                from: EMAIL_FROM,
+                to: EMAIL_TO,
+                subject: `Alerta de Prazo - ${type.toUpperCase()}`,
+                text: message
+            });
+        }
 
-        const order = {
-            id: uuidv4(),
-            products: response.data,
-            createdAt: new Date(),
-            status: 'CREATED'
-        };
+        console.log(JSON.stringify({
+            service: "email-service",
+            correlationId: correlationId || req.correlationId,
+            action: "email_sent",
+            demandId,
+            type,
+            message,
+            recipient: EMAIL_TO,
+            mode: useRealEmail ? 'smtp' : 'console',
+            timestamp: new Date().toISOString()
+        }));
 
-        res.status(201).json(order);
+        res.json({ message: 'Alert email sent successfully', smtp: useRealEmail });
     } catch (error) {
         console.error(JSON.stringify({
-            service: "order-service",
+            service: "email-service",
             correlationId: req.correlationId,
             error: error.message,
             timestamp: new Date().toISOString()
         }));
-        res.status(500).json({ error: 'Failed to create order' });
+        res.status(500).json({ error: 'Failed to send email' });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Order Service running on port ${PORT}`);
+    console.log(`Email Service running on port ${PORT}`);
 });

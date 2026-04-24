@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demand Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #eef2ff; color: #111827; }
+    header { background: #4338ca; color: white; padding: 20px; text-align: center; }
+    main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08); padding: 20px; margin-bottom: 20px; }
+    h2 { color: #1e3a8a; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, textarea, select, button { width: 100%; padding: 10px; margin-top: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+    button { background: #4338ca; color: white; cursor: pointer; border: none; }
+    button:hover { background: #312e81; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+    th { background: #eef2ff; }
+    .small-button { width: auto; display: inline-block; margin-top: 0; margin-right: 6px; }
+    .status-badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: 12px; color: white; }
+    .PENDENTE { background: #f59e0b; }
+    .EM_TRATATIVA { background: #0ea5e9; }
+    .FINALIZADA { background: #10b981; }
+    .alert-warning { color: #92400e; background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
+    .alert-urgent { color: #7f1d1d; background: #fee2e2; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
+    pre { background: #111827; color: white; padding: 16px; border-radius: 12px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Demand Dashboard</h1>
+    <p>Liste demandas, altere prazos, force verificações e consulte logs/alertas.</p>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Criar demanda</h2>
+      <form id="create-form">
+        <label>Título</label>
+        <input id="title" type="text" placeholder="Problema de login" required />
+        <label>Descrição</label>
+        <textarea id="description" placeholder="Descrição detalhada" rows="4" required></textarea>
+        <button type="submit">Criar demanda</button>
+      </form>
+      <div id="create-result"></div>
+    </div>
+
+    <div class="card">
+      <h2>Demandas</h2>
+      <button id="refresh-demands" class="small-button">Atualizar lista</button>
+      <button id="force-check" class="small-button">Forçar verificação</button>
+      <table>
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Status</th>
+            <th>Prazo</th>
+            <th>Dias restantes</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="demand-table"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Logs de verificação de prazos</h2>
+      <div id="logs-status"></div>
+      <div id="logs-container"></div>
+    </div>
+
+    <div class="card">
+      <h2>Alertas de email enviados</h2>
+      <div id="alerts-container"></div>
+    </div>
+
+    <div class="card">
+      <button id="clear-logs" class="small-button" style="background: #dc2626; color: white;">🗑️ Limpar Todos os Logs</button>
+    </div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

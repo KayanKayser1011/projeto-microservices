@@ -1,0 +1,124 @@
+ADR-005: USAR INTERFACE WEB ESTÁTICA SERVIDA POR EXPRESS
+
+Status: ACEITO
+Data: 24/04/2026
+Autor: Equipe de Desenvolvimento
+
+---
+
+1. CONTEXTO
+
+Como fornecer interface para usuários interagirem com o sistema de demandas? Precisa ser simples, rápido de desenvolver, sem dependências pesadas.
+
+Requisitos: visualizar demandas, criar/editar, forçar verificações, ver logs resumidos, responsivo.
+
+2. ALTERNATIVAS CONSIDERADAS
+
+ALTERNATIVA A: HTML/CSS/JS estático servido por Express - ESCOLHIDA
+
+Arquivos estáticos servidos por microsserviço dedicado.
+
+Vantagens:
+✓ Simples: HTML/CSS/JS puro
+✓ Rápido desenvolvimento: sem frameworks
+✓ Sem dependências: apenas Express
+✓ Leve: poucos KB
+✓ Fácil manutenção
+✓ Funciona offline
+
+Desvantagens:
+- Sem componentes reutilizáveis
+- JavaScript vanilla limitado
+
+ALTERNATIVA B: React/Vue/Angular SPA
+
+Framework JavaScript moderno com build.
+
+Vantagens:
++ Componentes reutilizáveis
++ Ecossistema rico
++ Developer experience
++ Performance otimizada
+
+Desvantagens:
+- Build complexo: webpack/vite
+- Dependências pesadas: node_modules
+- Curva aprendizado
+- Overkill para interface simples
+
+NÃO escolhido: complexidade desnecessária.
+
+ALTERNATIVA C: Template engine (EJS/Pug)
+
+Renderizar HTML no servidor.
+
+Vantagens:
++ Lógica no backend
++ SEO melhor
++ Sem JavaScript no cliente
+
+Desvantagens:
+- Estado no servidor complexo
+- Não responsivo a mudanças
+- Mistura frontend/backend
+
+NÃO adequado: interface interativa.
+
+ALTERNATIVA D: Framework CSS (Bootstrap/Tailwind)
+
+Biblioteca de estilos pronta.
+
+Vantagens:
++ Aparência profissional rápida
++ Responsivo automático
++ Componentes prontos
+
+Desvantagens:
+- Dependências externas
+- Personalização limitada
+- Bundle maior
+
+NÃO primário: CSS custom suficiente.
+
+3. DECISÃO
+
+USAR HTML/CSS/JS ESTÁTICO SERVIDO POR EXPRESS
+
+Justificativa:
+Interface simples não precisa de frameworks pesados. HTML/CSS/JS puro é suficiente, rápido de desenvolver e manter.
+
+4. CONSEQUÊNCIAS
+
+Positivas:
+- Desenvolvimento rápido
+- Sem dependências
+- Leve e performático
+- Fácil debug
+
+Negativas:
+- Sem hot reload
+- JavaScript limitado
+
+Mitigações:
+- Estrutura organizada
+- Funções modulares
+- CSS responsivo custom
+
+5. IMPLEMENTAÇÃO
+
+Estrutura:
+```
+ui-service/
+├── index.js          # Servidor Express
+├── public/
+│   ├── index.html    # Interface principal
+│   └── app.js        # Lógica JavaScript
+└── Dockerfile        # Container leve
+```
+
+API calls via fetch():
+- fetch('/demands') para listar
+- fetch('/demands', POST) para criar
+- fetch('/logs') para dados
+
+====== FIM DO ADR-005 ======

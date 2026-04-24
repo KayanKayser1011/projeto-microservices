@@ -1,8 +1,14 @@
 const express = require('express');
+const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+let demands = [];
+
+app.use(cors());
+app.use(express.json());
 
 app.use((req, res, next) => {
     req.correlationId = req.headers['x-correlation-id'] || uuidv4();
@@ -12,7 +18,7 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
     console.log(JSON.stringify({
-        service: "product-service",
+        service: "demand-service",
         correlationId: req.correlationId,
         method: req.method,
         url: req.url,
@@ -28,10 +34,10 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Product Service</title>
+            <title>Demand Service</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { 
+                body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     min-height: 100vh;
@@ -48,7 +54,7 @@ app.get('/', (req, res) => {
                     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                 }
                 h1 { color: #667eea; margin-bottom: 20px; font-size: 28px; }
-                .status { 
+                .status {
                     display: inline-block;
                     background: #10b981;
                     color: white;
@@ -97,26 +103,39 @@ app.get('/', (req, res) => {
         </head>
         <body>
             <div class="container">
-                <h1>📦 Product Service</h1>
+                <h1>📋 Demand Service</h1>
                 <div class="status">✓ Operational</div>
-                
+
                 <div class="section">
                     <h2>O que é?</h2>
-                    <p>Um microsserviço responsável por gerenciar o catálogo de produtos de forma independente. Pode ser escalado, modificado ou reimplantado sem afetar outros serviços.</p>
+                    <p>Microsserviço responsável por registrar e gerenciar demandas de problemas. Define prazo de 10 dias úteis para resposta.</p>
                 </div>
-                
+
                 <div class="section">
                     <h2>Endpoints Disponíveis</h2>
                     <div class="endpoint">GET /health</div>
                     <p>Verifica o status de saúde do serviço</p>
-                    
-                    <div class="endpoint">GET /products</div>
-                    <p>Lista todos os produtos disponíveis em formato JSON</p>
+
+                    <div class="endpoint">POST /demands</div>
+                    <p>Cria uma nova demanda de problema</p>
+
+                    <div class="endpoint">GET /demands</div>
+                    <p>Lista todas as demandas registradas</p>
+                </div>
+
+                <div class="section">
+                    <h2>Como Testar</h2>
+                    <p>Criar uma demanda:</p>
+                    <div class="endpoint">
+                        curl -X POST http://localhost:3001/demands \\
+  -H "Content-Type: application/json" \\
+  -d '{"title": "Problema X", "description": "Descrição detalhada"}'
+                    </div>
                 </div>
 
                 <div class="section">
                     <h2>Rastreabilidade</h2>
-                    <p>Todas as requisições são rastreadas com um ID único (Correlation ID) que viaja entre os microsserviços.</p>
+                    <p>Todas as requisições são rastreadas com um ID único (Correlation ID).</p>
                     <div class="correlationId">
                         <strong>Seu ID:</strong> ${req.correlationId}
                     </div>
@@ -139,15 +158,84 @@ app.get('/health', (req, res) => {
     res.json({ status: 'UP' });
 });
 
-app.get('/products', (req, res) => {
-    const products = [
-        { id: 1, name: "Laptop", price: 999.99, stock: 5 },
-        { id: 2, name: "Mouse", price: 29.99, stock: 50 },
-        { id: 3, name: "Keyboard", price: 79.99, stock: 20 }
-    ];
-    res.json(products);
+app.post('/demands', (req, res) => {
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+        return res.status(400).json({ error: 'Title and description are required' });
+    }
+
+    const createdAt = new Date();
+    const deadline = calculateBusinessDays(createdAt, 10);
+
+    const demand = {
+        id: uuidv4(),
+        title,
+        description,
+        status: 'PENDENTE',
+        createdAt,
+        deadline,
+        correlationId: req.correlationId
+    };
+
+    demands.push(demand);
+
+    res.status(201).json(demand);
 });
 
+app.get('/demands', (req, res) => {
+    res.json(demands);
+});
+
+app.patch('/demands/:id', (req, res) => {
+    const { id } = req.params;
+    const demand = demands.find(item => item.id === id);
+
+    if (!demand) {
+        return res.status(404).json({ error: 'Demanda não encontrada' });
+    }
+
+    const { title, description, status, deadline } = req.body;
+
+    if (title) demand.title = title;
+    if (description) demand.description = description;
+    if (status) demand.status = status;
+    if (deadline) demand.deadline = new Date(deadline);
+
+    res.json(demand);
+});
+
+app.delete('/demands/:id', (req, res) => {
+    const { id } = req.params;
+    const demandIndex = demands.findIndex(item => item.id === id);
+
+    if (demandIndex === -1) {
+        return res.status(404).json({ error: 'Demanda não encontrada' });
+    }
+
+    const demand = demands[demandIndex];
+    if (demand.status !== 'FINALIZADA') {
+        return res.status(400).json({ error: 'Só é possível apagar demandas finalizadas' });
+    }
+
+    demands.splice(demandIndex, 1);
+    res.json({ message: 'Demanda finalizada apagada com sucesso' });
+});
+
+function calculateBusinessDays(startDate, businessDays) {
+    let currentDate = new Date(startDate);
+    let daysAdded = 0;
+
+    while (daysAdded < businessDays) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
+            daysAdded++;
+        }
+    }
+
+    return currentDate;
+}
+
 app.listen(PORT, () => {
-    console.log(`Product Service running on port ${PORT}`);
+    console.log(`Demand Service running on port ${PORT}`);
 });
