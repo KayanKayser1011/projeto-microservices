@@ -15,7 +15,7 @@ Este projeto implementa uma arquitetura de microsserviços com:
 ### Executar
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/KayanKayser1011/projeto-microservices
 cd projeto-microservices
 
 # Iniciar todos os serviços

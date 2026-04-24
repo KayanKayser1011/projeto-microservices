@@ -3,23 +3,19 @@ ADR-001: USAR COMUNICAÇÃO SÍNCRONA (HTTP/REST) ENTRE MICROSSERVIÇOS
 Status: ACEITO
 Data: 19/04/2026
 Autor: Equipe de Desenvolvimento
-Revisor: Feedback incorporado em 22/04/2026
 
 ---
 
 1. CONTEXTO
 
-Nos microsserviços, dois serviços independentes (Order Service e Product Service)
-precisam se comunicar. Quando um cliente cria um pedido, o Order Service precisa
-consultar o Product Service para validar e obter informações dos produtos.
+Em microsserviços, Order Service precisa consultar Product Service para validar produtos ao criar pedidos.
 
-A pergunta é: como essa comunicação deve funcionar?
+Alternativas principais:
+- Síncrona: chama e espera resposta (como função normal)
+- Assíncrona: publica evento e continua (como email)
+- Banco compartilhado: ambos acessam mesmo DB
 
-Há alternativas fundamentalmente diferentes:
-- Comunicação síncrona: chamar e esperar resposta (como uma função)
-- Comunicação assíncrona: publicar evento e continuar (como um email)
-
-Cada abordagem tem tradeoffs diferentes.
+Cada opção tem prós e contras diferentes.
 
 
 2. ALTERNATIVAS CONSIDERADAS
@@ -27,71 +23,60 @@ Cada abordagem tem tradeoffs diferentes.
 ALTERNATIVA A: Comunicação Síncrona (HTTP/REST) - ESCOLHIDA
 
 Como funciona:
-Order Service faz uma requisição HTTP GET para Product Service
-Order espera a resposta antes de continuar
-Resposta é imediata ou falha instantaneamente
+- Order Service faz GET /products para Product Service
+- Espera resposta antes de continuar
+- Resposta é imediata ou erro
 
 Vantagens:
-+ Simples: usa HTTP que todos conhecem, sem abstração
-+ Debugável: pode testar com curl do terminal
-+ Resposta imediata: cliente recebe resposta rápida
-+ Sem infraestrutura adicional: apenas HTTP
-+ Ferramentas existentes: Postman, curl, navegador
++ Simples: HTTP que todos conhecem
++ Debug fácil: testar com curl
++ Resposta rápida ao cliente
++ Sem infraestrutura extra
 
 Desvantagens:
-- Acoplamento temporal: se Product Service vai down, Order Service falha
-- Cascata de falhas: demora em Product pode congelar Order
-- Latência acumulada: cada chamada adiciona tempo
-- Difícil escalar: muitas chamadas síncronas congestionam
+- Acoplamento: se Product cai, Order falha
+- Cascata de falhas: atraso em Product afeta Order
+- Latência maior: cada chamada adiciona tempo
 
-Quando usar:
-- Respostas imediatas são críticas (exemplo: checkout online)
-- Serviços têm alta disponibilidade esperada
-- Volume de chamadas é pequeno a médio
+Quando usar: respostas imediatas críticas, alta disponibilidade esperada, volume pequeno/médio
 
 
 ALTERNATIVA B: Comunicação Assíncrona (Message Queue)
 
 Como funciona:
-Order Service publica uma mensagem "pedido criado" em uma fila (RabbitMQ, Kafka)
-Order Service responde ao cliente imediatamente
-Product Service processa a mensagem quando consegue
+- Order publica "pedido criado" em fila (RabbitMQ/Kafka)
+- Order responde cliente imediatamente
+- Product processa mensagem quando consegue
 
 Vantagens:
-+ Desacoplamento: Product Service não precisa estar disponível agora
-+ Resiliente: se falhar, a mensagem fica na fila esperando
-+ Escalável: fila absorve picos de demanda
-+ Tolerância a falhas: retry automático
++ Desacoplado: Product pode estar down
++ Resiliente: mensagens ficam na fila
++ Escalável: fila absorve picos
 
 Desvantagens:
-- Complexidade: adiciona infraestrutura de mensageria
-- Debugging difícil: mensagens são invisíveis no fluxo
-- Latência maior: processamento não é imediato
-- Consistência eventual: dados podem estar desatualizados temporariamente
+- Complexo: precisa infraestrutura de mensageria
+- Debug difícil: mensagens invisíveis
+- Latência maior: processamento não imediato
 
-Quando usar:
-- Pode processar em background (orders demoram para ser processados)
-- Quer alta resiliência contra falhas
-- Espera alto volume de requisições
+Quando usar: processamento em background, alta resiliência, volume alto
 
 
 ALTERNATIVA C: Bancos de dados compartilhados
 
 Como funciona:
-Ambos os serviços compartilham o mesmo banco de dados
-Order Service lê dados de produtos diretamente da tabela
+- Ambos serviços acessam mesmo banco
+- Order lê produtos diretamente da tabela
 
 Vantagens:
 + Sem latência de rede
 + Dados sempre consistentes
 
 Desvantagens:
-- Viola princípio de microsserviços: não são realmente independentes
-- Evolução: mudar schema de produtos quebra Order Service
-- Não há isolamento: falha em um afeta o outro
-- Escala limitada: gargalo no banco de dados
+- Viola microsserviços: não independentes
+- Evolução difícil: mudança em produtos quebra Order
+- Sem isolamento: falha em um afeta outro
 
-NÃO recomendado: é como ter monolito disfarçado de microsserviços.
+NÃO recomendado: como monolito disfarçado.
 
 
 3. DECISÃO
@@ -99,55 +84,99 @@ NÃO recomendado: é como ter monolito disfarçado de microsserviços.
 IMPLEMENTAR COMUNICAÇÃO SÍNCRONA VIA HTTP/REST
 
 Justificativa:
-Este é um projeto educacional com requisitos moderados. A simplicidade é
-importante para aprender conforme avança. HTTP/REST é padrão na indústria
-e todos conseguem entender, testar e debugar.
-
-Além disso:
-- O volume esperado é pequeno (projeto acadêmico)
-- Respostas imediatas fazem sentido para criar pedidos
-- Não temos expectativa de falhas frequentes
-- O aprendizado de HTTP é mais valioso agora que aprender Kafka
-
-Para produção: essa decisão seria revisitada, provavelmente usando assíncrono
-para melhor escalabilidade e resiliência.
+Projeto educacional, simplicidade importa. HTTP/REST é padrão da indústria, fácil entender e debugar. Volume esperado pequeno, respostas imediatas fazem sentido. Aprendizado de HTTP vale mais que Kafka agora.
 
 
 4. CONSEQUÊNCIAS
 
 POSITIVAS:
-✓ Todos conseguem entender e usar (simplidade)
-✓ Prototipagem rápida: não precisa infraestrutura extra
-✓ Fácil debugar: usa ferramentas convencionais (curl, logs)
-✓ Custo operacional baixo: apenas Node.js rodando
+✓ Simples e fácil entender
+✓ Prototipagem rápida
+✓ Debug com ferramentas comuns
+✓ Custo operacional baixo
 
 NEGATIVAS:
-✗ Acoplamento temporal: interdependência entre serviços
-✗ Latência maior em picos de carga
-✗ Validação em tempo real aumenta latência
-✗ Em produção com alto volume, isso seria um problema
-
-NEUTRAS:
-~ Requer implementação de retry logic se quiser resiliência
-~ Requer timeout management (não ficar esperando para sempre)
-~ Requer circuit breaker pattern para degradation graceful
+✗ Acoplamento temporal entre serviços
+✗ Latência maior em picos
+✗ Precisa timeout para evitar travamentos
+✗ Em produção alto volume, seria problema
 
 
 5. FEEDBACK DO PEER REVIEW (22/04/2026)
 
-Peer Review feito por: [Nome do colega]
-
-Comentários recebidos:
-- Bom: justificativa clara para escolha síncrona
-- Sugestão: considerar timeout no axios para evitar travamentos
-- Sugestão: adicionar retry logic com backoff exponencial
+Comentários:
+- Bom: justificativa clara
+- Sugestão: timeout no axios
 - Concordância: alternativas bem exploradas
 
 Ações tomadas:
-✓ Adicionado timeout de 5 segundos no cliente axios (order-service)
-✓ Adicionado logging de erro mais descritivo
-✓ Documentado como implementar retry futuramente (ADR-004 candidate)
-   Service antes de criar um pedido
+✓ Timeout 5s no axios (order-service)
+✓ Logging de erro melhor
+✓ Documentado retry futuro
+
+
+ALTERNATIVA B: Comunicação Assíncrona (Message Queue)
+
+Como funciona:
+- Order publica mensagem em fila
+- Responde cliente imediatamente
+- Product processa depois
+
+Vantagens:
++ Desacoplado e resiliente
++ Escalável
+
+Desvantagens:
+- Mais complexo
+- Debug difícil
+
+Quando usar: processamento background, alta resiliência
+
+
+ALTERNATIVA C: Banco compartilhado
+
+Como funciona:
+- Ambos acessam mesmo DB
+
+Vantagens:
++ Sem latência rede
+
+Desvantagens:
+- Viola microsserviços
+- Sem isolamento
+
+NÃO recomendado.
+
+
+3. DECISÃO
+
+Usar síncrona HTTP/REST
+
+Justificativa:
+Projeto educacional, simplicidade. HTTP padrão indústria. Volume pequeno, respostas imediatas.
+
+
+4. CONSEQUÊNCIAS
+
+Positivas:
+✓ Simples
+✓ Fácil debug
+✓ Prototipagem rápida
+
+Negativas:
+✗ Acoplamento
+✗ Latência maior
+
+
+5. FEEDBACK PEER REVIEW
+
+Comentários:
+- Justificativa clara
+- Sugestão timeout
+
+Ações:
+✓ Timeout 5s no axios
+✓ Logging melhor
 2. Simplicidade: Tanto Express.js quanto Axios fazem isso trivialmente
 3. Observabilidade: HTTP é fácil de monitorar com ferramentas padrão
 4. Escopo do projeto: Volume esperado não justifica complexidade de filas
@@ -155,9 +184,7 @@ Ações tomadas:
    padrões avançados
 
 
-================================================================================
 4. CONSEQUÊNCIAS
-================================================================================
 
 4.1 Positivas
 - Implementação rápida e direta ✓
@@ -185,9 +212,7 @@ Ações tomadas:
 - Considerar migração para async se volume crescer
 
 
-================================================================================
 5. VALIDAÇÃO E TESTES
-================================================================================
 
 Teste manual realizado:
 - Order Service consegue chamar Product Service via HTTP ✓
@@ -206,19 +231,5 @@ curl -X POST http://localhost:3002/orders \
   -H "X-Correlation-ID: test-123" \
   -d '{}'
 ```
-
-
-================================================================================
-6. EVOLUÇÃO DESTA DECISÃO
-================================================================================
-
-Esta decisão pode ser revisitada quando:
-- Volume de requisições increase > 1000 req/s
-- Latência entre serviços se torna critical (> 500ms P95)
-- Taxa de falha do Product Service > 1%
-- Necessidade de desacoplamento temporal aumentar
-
-Nestes casos, considerar migração para padrão assíncrono com Message Queue.
-
 
 ====== FIM DO ADR-001 ======

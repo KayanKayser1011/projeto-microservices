@@ -1,0 +1,283 @@
+DOCUMENTO DE ARQUITETURA
+Sistema de Gerenciamento de Pedidos e Produtos
+Projeto Integrador - Arquitetura de Microsserviços
+
+1. CONTEXTO E PROBLEMA
+
+Por que microsserviços?
+
+Monolito: tudo em uma aplicação. Problema: um erro afeta tudo, difícil escalar partes específicas.
+
+Microsserviços: cada domínio tem seu próprio serviço, independente para escalar, manter, evoluir.
+
+Domínios: Product (produtos) e Order (pedidos).
+
+
+2. MAPA DE BOUNDED CONTEXTS
+
+Product Context: gerencia catálogo, estoque, preços.
+- Dados: id, name, price, stock
+- Autossuficiente
+
+Order Context: gerencia pedidos.
+- Dados: id, products, createdAt, status
+- Depende de Product para validar produtos
+
+
+3. DIAGRAMA DE SERVIÇOS
+
+Cliente → Order Service (POST /orders) → Product Service (GET /products)
+
+Protocolo: HTTP/REST, JSON, Correlation ID no header X-Correlation-ID
+
+
+4. OBJETIVOS DE NÍVEL DE SERVIÇO (SLOs)
+
+Disponibilidade: 99% (7.2h downtime/mês)
+Latência: p50 <100ms, p99 <500ms (Order: p99 <800ms)
+Taxa erro: <0.1%
+
+Order tem latência maior porque depende de Product.
+
+
+5. ESTRATÉGIAS DE OBSERVABILIDADE
+
+Logging estruturado JSON com Correlation ID para rastrear requisições.
+
+Health checks: GET /health retorna {"status": "UP"}
+
+Integração futura: ELK, Datadog, CloudWatch
+
+
+6. ESTRATÉGIAS DE SEGURANÇA
+
+Comunicação interna: HTTP (dev), HTTPS/mTLS (prod)
+
+Validação: tipos de dados, não vazios
+
+Rate limiting futuro
+
+Isolamento rede: Docker rede privada
+
+
+7. PADRÕES IMPLEMENTADOS
+
+Comunicação: Síncrona REST
+
+Resiliência: Health checks, timeout
+
+Escalabilidade: Stateless services
+
+
+8. ESTRUTURA ATUAL
+
+projeto-microservices/
+├── docker-compose.yml
+├── product-service/ (Dockerfile, index.js, package.json)
+├── order-service/ (Dockerfile, index.js, package.json)
+├── ARQUITETURA.txt
+├── ADR-001.txt, ADR-002.txt, ADR-003.txt
+├── PEER_REVIEW_CHECKLIST.txt
+
+====== FIM DO DOCUMENTO DE ARQUITETURA ======
+
+
+5. ESTRATÉGIAS DE OBSERVABILIDADE
+
+Logging JSON com campos: service, correlationId, method, url, timestamp
+
+Correlation ID: ID único por requisição, propaga entre serviços.
+
+Health checks: GET /health
+
+Integração futura: ELK, Datadog
+
+
+6. ESTRATÉGIAS DE SEGURANÇA
+
+Comunicação: HTTP (dev), HTTPS/mTLS (prod)
+
+Validação: tipos, não vazios
+
+Rate limiting futuro
+
+Rede isolada Docker
+
+
+7. PADRÕES IMPLEMENTADOS
+
+Comunicação: Síncrona REST
+
+Resiliência: Health checks, timeout
+
+Escalabilidade: Stateless
+
+
+8. ESTRUTURA ATUAL
+
+projeto-microservices/
+├── docker-compose.yml
+├── product-service/ (Dockerfile, index.js, package.json)
+├── order-service/ (Dockerfile, index.js, package.json)
+├── ARQUITETURA.txt
+├── ADR-001.txt, ADR-002.txt, ADR-003.txt
+├── PEER_REVIEW_CHECKLIST.txt
+
+====== FIM DO DOCUMENTO DE ARQUITETURA ======
+  { "id": 1, "name": "Produto A", "price": 10 },
+  { "id": 2, "name": "Produto B", "price": 20 }
+]
+```
+
+3.2.2 Health Check (Ambos os Serviços)
+Protocolo: HTTP/REST
+Método: GET
+Endpoint: http://[service]:3001/health ou /3002/health
+
+Exemplo de Response:
+```json
+{ "status": "UP" }
+```
+
+3.3 Service Discovery
+Tipo: DNS-based (Docker Compose automatic)
+A rede do Docker Compose resolve automaticamente os hostnames dos serviços
+Nomes internos:
+  - product-service (porta 3001)
+  - order-service (porta 3002)
+
+
+4. SLOs (SERVICE LEVEL OBJECTIVES)
+
+4.1 Disponibilidade
+Objetivo: 99.5% de uptime
+Definição: Percentual de tempo que o serviço responde com status 2xx
+Medição: Monitoring via health checks a cada 30 segundos
+
+4.2 Latência (P-percentis)
+Para GET /products:
+  - P50 (mediana): ≤ 100ms
+  - P95: ≤ 500ms
+  - P99: ≤ 1000ms
+
+Para POST /orders:
+  - P50: ≤ 200ms
+  - P95: ≤ 800ms
+  - P99: ≤ 1500ms
+
+4.3 Taxa de Erro
+Objetivo: Taxa de erro < 1%
+Definição: Respostas com status 5xx / Total de requests
+Alertas gerados quando taxa > 0.5% por 5 minutos
+
+4.4 Taxa de Throughput
+Objetivo mínimo: 100 requisições por segundo por serviço
+
+4.5 Tempo de Recuperação
+RTO (Recovery Time Objective): < 2 minutos após falha
+RPO (Recovery Point Objective): Sem perda de estado (serviços stateless)
+
+
+5. ESTRATÉGIAS DE OBSERVABILIDADE
+
+5.1 Logging Estruturado
+Formato: JSON estruturado
+Informações capturadas por request:
+  - service: Nome do microsserviço
+  - correlationId: UUID único para rastreamento de request
+  - method: HTTP method (GET, POST, etc)
+  - url: Endpoint solicitado
+  - timestamp: Hora da requisição
+
+Exemplo de Log:
+{
+  "service": "order-service",
+  "correlationId": "c3c37667-29d1-44c0-87b5-92a5dfcdd9fd",
+  "method": "POST",
+  "url": "/orders"
+}
+
+5.2 Correlation ID (X-Correlation-ID)
+Propagação: Cada request original recebe um UUID
+O serviço chamador passa para downstream via header X-Correlation-ID
+Benefício: Rastreabilidade de requisições através da cadeia de microsserviços
+
+5.3 Health Checks
+Método: HTTP GET /health
+Resposta esperada: {"status": "UP"}
+Frequência: A cada 30 segundos (configurável)
+
+5.4 Implementação Atual
+- Logging: Console (stdout) com JSON estruturado
+- Correlation ID: Middleware Express captura/propaga
+- Health checks: Endpoint /health funcional em ambos serviços
+
+5.5 Melhorias Futuras Recomendadas
+- Agregação de logs centralizada (ELK Stack, Datadog, etc)
+- Distributed tracing (Jaeger, Zipkin)
+- Métricas de aplicação (Prometheus)
+- APM (Application Performance Monitoring)
+
+
+6. ESTRATÉGIAS DE SEGURANÇA
+
+6.1 Comunicação entre Serviços
+Status Atual: HTTP plaintext (sem TLS)
+Recomendação: 
+  - Produção: Implementar mTLS (Mutual TLS)
+  - Desenvolvimento: Manter HTTP para simplicidade
+
+6.2 Autenticação e Autorização
+Status Atual: Nenhuma implementada (não obrigatório nesta fase)
+Recomendação:
+  - Implementar JWT (JSON Web Tokens) para requests internos
+  - Validar token em cada serviço chamado
+  - Implementar rate limiting por cliente
+
+6.3 Validação de Input
+Implementado:
+  - Express middleware já valida JSON
+  - Tipos de dados estariam validados com schemas (futuro)
+
+Recomendação:
+  - Implementar validação de schema com biblioteca como joi/zod
+
+6.4 Isolamento de Rede
+Implementado:
+  - Docker Compose cria rede isolada para o projeto
+  - Serviços se comunicam apenas dentro dessa rede
+  - Portas expostas são explícitas (3001, 3002)
+
+6.5 Secrets e Variáveis de Ambiente
+Status Atual: Configurações hardcoded
+Recomendação:
+  - Usar arquivo .env para variáveis sensíveis
+  - Nunca commitar secrets no GitHub
+  - Em produção, usar gerenciador de secrets (AWS Secrets Manager, etc)
+
+6.6 Dependências e Vulnerabilidades
+Recomendação:
+  - Executar npm audit regularmente
+  - Manter dependências atualizadas
+  - Implementar CI/CD com verificação de segurança
+
+
+7. PADRÕES IMPLEMENTADOS
+
+7.1 Padrões de Comunicação
+- Síncrono (REST): Order Service → Product Service
+- HTTP/REST oferece simplicidade e debugging direto
+
+7.2 Padrões de Resiliência
+- Health Checks: Para detecção de falhas
+- Timeout (implícito): Axios tem timeout padrão
+
+Recomendações:
+- Circuit Breaker: Implementar com biblioteca como opossum
+- Retry com backoff exponencial
+- Fallback strategy
+
+7.3 Padrões de Escalabilidade
+- Serviços stateless (sem estado local persistente)
+- Cada instância independente e substituível
+- Permite scaling horizontal

@@ -3,28 +3,14 @@ ADR-002: IMPLEMENTAR LOGGING ESTRUTURADO COM CORRELATION IDs
 Status: ACEITO
 Data: 19/04/2026
 Autor: Equipe de Desenvolvimento
-Revisor: Aguardando Peer Review
 
 ---
 
 1. CONTEXTO
 
-Imagine que uma requisição passa por múltiplos serviços:
-1. Cliente faz POST /orders para Order Service
-2. Order Service chama GET /products em Product Service
-3. Product Service retorna lista de produtos
-4. Order Service retorna pedido criado ao cliente
+Requisição passa por Order Service → Product Service. Se erro 500, como saber qual serviço causou?
 
-Se algo der errado (erro 500), como descobrir o que aconteceu?
-
-Os logs estão em dois lugares:
-- Logs do Order Service (em um arquivo/console)
-- Logs do Product Service (em outro arquivo/console)
-
-Como correlacionar qual erro no Product Service afetou o pedido no Order Service?
-
-Resposta: usar Correlation ID, um identificador único que viaja através de
-todos os serviços.
+Logs estão separados. Correlation ID único viaja por todos serviços para correlacionar.
 
 
 2. ALTERNATIVAS CONSIDERADAS
@@ -32,95 +18,74 @@ todos os serviços.
 ALTERNATIVA A: Logging estruturado com Correlation ID - ESCOLHIDA
 
 Como funciona:
-1. Cliente ou Gateway gera um UUID único: "550e8400-e29b-41d4-a716-446655440000"
-2. Envia este ID no header HTTP: X-Correlation-ID
-3. Order Service recebe, usa dentro de seus logs, e propaga para Product Service
-4. Product Service recebe, usa dentro de seus logs
-5. Todos os logs incluem este ID
+- Gera UUID único por requisição
+- Propaga via header X-Correlation-ID
+- Logs JSON incluem correlationId
 
-Usando esse ID "550e8400-e29b-41d4-a716-446655440000", conseguimos buscar em
-todos os logs e reconstruir a jornada completa da requisição.
-
-Formato JSON estruturado:
+Exemplo log:
 {
   "service": "order-service",
-  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "correlationId": "abc123",
   "method": "POST",
-  "url": "/orders",
-  "timestamp": 1682083200
+  "url": "/orders"
 }
 
 Vantagens:
-✓ Rastreabilidade: vê toda a jornada de uma requisição
-✓ Parseable: JSON é estruturado, máquinas podem ler
-✓ Sem ferramentas fancy: funciona com logs simples em stdout
-✓ Escalável: depois integra com ELK, Datadog, CloudWatch
-✓ Simples: middleware Express lê header e coloca em logs
+✓ Rastreabilidade completa
+✓ JSON estruturado
+✓ Sem ferramentas extras
+✓ Escalável para ELK/Datadog
 
 Desvantagens:
-- Logs em stdout: em produção, não está centralizado
-- Disciplina: precisa lembrar de sempre enviar X-Correlation-ID
-- Sem automação: ninguém coleta logs centralmente nesta fase
+- Logs stdout (perdem se container morre)
+- Disciplina para sempre enviar header
 
 
 ALTERNATIVA B: Logging centralizado custom
 
-Criar um microsserviço dedicado só para logs:
-1. Cada serviço envia logs em tempo real para Log Service
-2. Log Service centralizadas tudo em um banco de dados
-3. Dashboard mostra todos os logs
+Criar microsserviço para logs centralizados.
 
 Vantagens:
-+ Logs centralizados desde o início
++ Logs centralizados desde início
 + Dashboard visual
-+ Busca rápida
 
 Desvantagens:
-- Outro serviço rodando (complexidade operacional)
-- Mais código para manter
-- Overkill para projeto educacional (é como usar canhão para matar mosca)
+- Mais complexidade
+- Overkill para projeto educacional
 
-NÃO é o melhor fit: adiciona muita complexidade.
+NÃO escolhido.
 
 
 ALTERNATIVA C: Logging simples (console.log plain text)
 
-Apenas usar console.log() sem estrutura:
-
-console.log("Order Service processou requisição");
-console.log("Erro ao conectar em Product Service");
+Apenas console.log sem estrutura.
 
 Vantagens:
-+ Fácil: 5 minutos de código
-+ Humano-legível
++ Fácil
 
 Desvantagens:
-- Impossível fazer busca automática
-- Difícil correlacionar entre serviços
-- Logs crescem sem controle
+- Impossível correlacionar
+- Sem contexto
+
+NÃO recomendado.
 - Sem contexto: timestamp, service, method, etc
 
 NÃO recomendado: não oferece rastreabilidade.
 
 
-ALTERNATIVA D: Biblioteca de logging (Winston, Pino)
+ALTERNATIVA D: Biblioteca logging (Winston, Pino)
 
-Usar biblioteca profissional como Winston ou Pino:
-
-const winston = require('winston');
-logger.info('Order created', { orderId: '123', correlationId: 'abc' });
+Usar Winston para logging avançado.
 
 Vantagens:
-+ Profissional, usado em produção real
-+ Suporte a múltiplos outputs (arquivo, syslog, webhook)
-+ Níveis de log (info, warn, error, debug)
++ Profissional
++ Múltiplos outputs
 
 Desvantagens:
-- Mais dependências do npm
-- Curva de aprendizado adicional
-- Overhead pequeno de performance
+- Mais dependências
+- Curva aprendizado
 
-NÃO escolhida nesta fase: console.log + JSON é suficiente.
+NÃO escolhido: console.log + JSON suficiente.
 
 
 3. DECISÃO
@@ -128,47 +93,30 @@ NÃO escolhida nesta fase: console.log + JSON é suficiente.
 USAR LOGGING ESTRUTURADO COM CORRELATION IDs
 
 Justificativa:
-Esse é o padrão ouro da indústria. É simples, escalável e não requer
-ferramentas adicionais. Aprender Correlation IDs agora économiza tempo depois
-quando tiver que debugar em produção.
-
-Console.log + JSON estruturado + Correlation ID é a base que toda empresa
-usa. Winston e Pino são apenas abstrações em cima disso.
+Padrão indústria. Simples, escalável. Aprender Correlation IDs agora economiza tempo depois.
 
 
 4. CONSEQUÊNCIAS
 
 POSITIVAS:
-✓ Rastreabilidade completa de requisições entre serviços
-✓ JSON é indexável (compatible com ferramentas futuras)
-✓ Sem dependências adicionais (console.log nativo)
-✓ Aprendizado valioso: como realmente funciona logging em produção
-✓ Simples de implementar (middleware Express de 8 linhas)
+✓ Rastreabilidade requisições
+✓ JSON indexável
+✓ Sem dependências extras
+✓ Aprendizado valioso
 
 NEGATIVAS:
-✗ Logs em stdout: se container morrer, logs se perdem
-✗ Precisa disciplina: sempre enviar X-Correlation-ID
-✗ Sem agregação automática: precisa buscar manualmente
-✗ Alto I/O em logs muito grandes
-
-NEUTRAS:
-~ Pode integrar com ELK/Splunk/CloudWatch depois (backward compatible)
-~ Requer política de retenção de logs (não acumula forever)
-~ Requer ferramenta de aggregação para análise de tendências
+✗ Logs stdout (não persistentes)
+✗ Disciplina para propagar ID
 
 
 5. IMPLEMENTAÇÃO
 
-Middleware Express que implementa:
+Middleware Express:
 
 app.use((req, res, next) => {
-    // Se não veio correlation ID, gera novo
     req.correlationId = req.headers['x-correlation-id'] || uuidv4();
-    
-    // Retorna pro cliente no response header
     res.set('x-correlation-id', req.correlationId);
     
-    // Log estruturado
     console.log(JSON.stringify({
         service: "order-service",
         correlationId: req.correlationId,
@@ -179,49 +127,24 @@ app.use((req, res, next) => {
     next();
 });
 
-Ao chamar outro serviço:
+Ao chamar serviço:
 axios.get('http://product-service:3001/products', {
     headers: { 'x-correlation-id': req.correlationId }
 });
 ```
 
 
-================================================================================
 6. VALIDAÇÃO E TESTES
-================================================================================
 
 Testes realizados:
-✓ Correlation ID é gerado se não fornecido no header
-✓ Correlation ID é propagado corretamente entre serviços
-✓ Logs são estruturados em JSON válido
-✓ Header X-Correlation-ID é retornado na resposta
-✓ Formato de log é consistente (service, correlationId, method, url)
+✓ Correlation ID gerado se não fornecido
+✓ Propagado entre serviços
+✓ Logs JSON válidos
+✓ Header retornado
 
 Teste manual:
-```bash
-# Terminal 1: Rodar compose
-docker compose up
-
-# Terminal 2: Fazer requisição com ID específico
 curl -H "X-Correlation-ID: meu-id-teste" http://localhost:3002/orders
-
-# Terminal 1: Procurar logs com questo ID
-# Aparecerão logs de order-service e product-service com correlationId: "meu-id-teste"
-```
-
-
-================================================================================
-7. REVISÃO PÓS-FEEDBACK
-================================================================================
-
-Feedback recebido no Peer Review:
-- [Aguardando peer review]
-
-Ajustes realizados:
-- [Serão registrados após revisão]
-
-Histórico de versões:
-- v1.0 (19/04/2026): Implementação inicial com middleware Express custom
+Procurar logs com "meu-id-teste" em ambos serviços.
 
 
 ====== FIM DO ADR-002 ======
