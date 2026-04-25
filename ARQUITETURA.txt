@@ -57,7 +57,7 @@ Para producao, seria necessario HTTPS ou mTLS.
 A entrada de dados deve ser validada no backend.
 O projeto ainda nao tem autenticacao ou autorizacao.
 
-6. Padrıes usados
+6. Padr√µes usados
 
 - Comunicacao: REST sincronico.
 - Servicos stateless quando possivel.
