@@ -1,260 +1,70 @@
-ADR-003: USAR DOCKER COMPOSE PARA ORQUESTRAÇÃO LOCAL E TESTES
+ADR-003: USAR DOCKER COMPOSE PARA ORQUESTRACAO LOCAL E TESTES
 
 Status: ACEITO
 Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
----
+1. Contexto
 
-1. CONTEXTO
+Temos quatro servicos separados: Demand Service, Deadline Checker Service, Email Service e UI Service.
+Queremos rodar tudo junto com um unico comando e garantir que os servicos se encontrem.
 
-Quatro serviços separados (Demand, Deadline Checker, Email, UI), como rodá-los juntos consistentemente? Como garantir que alguém execute tudo com um comando?
+2. Alternativas consideradas
 
-Requisitos: um comando inicia tudo, serviços comunicam, portas mapeadas, rede isolada, fácil debug, funciona em qualquer máquina.
-
-2. ALTERNATIVAS CONSIDERADAS
-
-ALTERNATIVA A: Docker Compose - ESCOLHIDA
-
-Arquivo docker-compose.yml define todos serviços em YAML.
-
-Um comando: docker compose up
+Alternativa A: Docker Compose - escolhido
+- Use um arquivo docker-compose.yml para definir todos os servicos.
+- Um unico comando inicia tudo.
+- Docker cria rede interna e resolve nomes de servicos automaticamente.
 
 Vantagens:
-✓ Simples: um arquivo YAML
-✓ Um comando inicia tudo
-✓ DNS automático: serviços se encontram por nome
-✓ Rede isolada segura
-✓ Reproduzível: mesma config em dev/test
-✓ Rápido: prototipagem em minutos
-✓ Demonstração: funciona primeira tentativa
+- Facil de usar.
+- Reproduzivel em qualquer maquina com Docker.
+- Bom para desenvolvimento e demonstracao.
 
 Desvantagens:
-- Não production-grade: um host, sem auto-healing
-- Sem orquestração avançada
-- Sem load balancing
+- Nao e solucao de producao completa.
+- Um host apenas.
+- Sem auto healing e sem load balancing avancado.
 
-ALTERNATIVA B: Kubernetes (K8s)
+Alternativa B: Kubernetes
+- Muito mais complexo.
+- Overkill para este projeto educacional.
 
-Manifests YAML complexos para Pods, Services, Deployments.
+Alternativa C: docker run manual
+- Funciona, mas e dificil e propenso a erro.
 
-Vantagens:
-+ Orquestração profissional com auto-healing
-+ Auto-scaling
-+ Load balancing nativo
-+ Rolling updates sem downtime
+Alternativa D: script ou Makefile
+- Ajuda, mas ainda depende de docker run manual e pode funcionar mal no Windows.
 
-Desvantagens:
-- Curva aprendizado alta (50+ páginas docs)
-- Overkill para projeto educacional
-- Setup complexo: Kind/Minikube/kubectl
-- Tempo setup: 30-60 min apenas instalar
+3. Decisao
 
-NÃO prático: projeto para aprender arquitetura, não Kubernetes.
+Usar Docker Compose para desenvolvimento local e testes.
 
-ALTERNATIVA C: Docker run manual
-
-Executar containers manualmente com docker run.
-
-Vantagens:
-+ Controle baixo nível
-+ Aprende Docker profundamente
-
-Desvantagens:
-- Tedioso: múltiplos comandos complexos
-- Propenso erros: vírgula errada quebra
-- Impossível manter: esquece comandos
-- Impossível demonstrar: 5 min typing com risco
-
-NÃO prático: inviável para apresentação.
-
-ALTERNATIVA D: Makefile ou shell script
-
-Usar Makefile ou script bash para automatizar.
-
-Vantagens:
-+ Melhor que docker run manual
-+ Documentado em arquivo
-
-Desvantagens:
-- Windows: Makefile não funciona nativo
-- Cross-platform: bash não funciona Windows
-- Ainda wrapper: docker run por trás
-- Não melhora reproducibilidade
-
-NÃO primário: Docker Compose resolve melhor.
-
-3. DECISÃO
-
-USAR DOCKER COMPOSE PARA DESENVOLVIMENTO E TESTES
-
-Justificativa:
-Docker Compose é ferramenta certa para dev local. Simples e poderosa, grandes empresas usam docker-compose.yml como linguagem de definição de infraestrutura para dev environments.
-
-Para produção, migra para Kubernetes. Mas para aprender arquitetura agora, Docker Compose é perfeito.
-
-4. CONSEQUÊNCIAS
+4. Consequencias
 
 Positivas:
-✓ Experiência simples: docker compose up
-✓ Reproduzível: mesma config qualquer máquina
-✓ Rápido: prototipagem minutos
-✓ Escalável para learning: adicionar serviços depois
-✓ Excelente demonstração: funciona primeira tentativa
-✓ Fácil reset: docker compose down && up
+- Um comando para subir tudo.
+- Servicos se encontram por nome.
+- Facil de reiniciar e mostrar para avaliadores.
 
 Negativas:
-✗ Não production: sem auto-healing
-✗ Sem auto-scaling
-✗ Sem load balancing
+- Nao e o mesmo que um ambiente de producao.
+- Fica limitado a uma maquina.
 
-5. IMPLEMENTAÇÃO
+5. Implementacao
 
-Arquivo docker-compose.yml:
+O docker-compose define:
+- demand-service na porta 3001.
+- deadline-checker-service na porta 3002 com volume para logs.
+- email-service na porta 3003 com variaveis SMTP.
+- ui-service na porta 3000.
 
-services:
-  demand-service:
-    build: ./demand-service
-    ports: ["3001:3001"]
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+O deadline-checker depende do demand-service e do email-service.
 
-  deadline-checker-service:
-    build: ./deadline-checker-service
-    ports: ["3002:3002"]
-    volumes:
-      - deadline-checker-data:/app/data
-    depends_on:
-      demand-service:
-        condition: service_healthy
-      email-service:
-        condition: service_healthy
-
-  email-service:
-    build: ./email-service
-    ports: ["3003:3003"]
-    environment:
-      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-
-  ui-service:
-    build: ./ui-service
-    ports: ["3000:3000"]
-    depends_on:
-      - demand-service
-      - deadline-checker-service
-      - email-service
-
-networks:
-  microservices-net:
-    driver: bridge
-
-volumes:
-  deadline-checker-data:
-    driver: local
-
-Comandos:
-docker compose up
-docker compose logs -f
-docker compose down
-
-# Remover volumes (reset completo)
-docker compose down -v
-
-# Rebuild das images
-docker compose up --build
-
-====== FIM DO ADR-003 ======
-      - product-service           # Garante que product sobe primeiro
-```
-
-5.2 Como funciona:
-```
-docker compose up --build
-    ↓
-Cria rede isolada "projeto-microservices"
-    ↓
-Constrói image de product-service a partir de Dockerfile
-    ↓
-Inicia container product-service acessível em http://product-service:3001
-    ↓
-Constrói image de order-service
-    ↓
-Inicia container order-service acessível em http://order-service:3002
-    ↓
-    ✓ Ambos rodando e comunicando-se via hostname interno
-```
-
-5.3 Service Discovery automático:
-No Docker Compose, services se encontram automaticamente pelo NOME:
-- order-service pode chamar product-service assim:
-  ```javascript
-  axios.get('http://product-service:3001/products')
-  ```
-  
-Isso funciona porque Docker Compose cria uma rede com DNS interno
-que resolve nomes de serviços para IPs dos containers.
-
-
-6. COMANDOS ESSENCIAIS
-
-Para apresentação ao vivo:
-
-# Subir tudo (build + start)
-docker compose up --build
-
-# Ver status dos containers
-docker compose ps
-
-# Ver logs em tempo real
-docker compose logs -f
-
-# Parar tudo
-docker compose down
-
-# Remover volumes (data)
-docker compose down -v
-
-# Reconstruir images
-docker compose build --no-cache
-
-# Executar comando em container
-docker compose exec product-service bash
-
-# Ver variáveis de ambiente
-docker compose config
-
-# Verificar health
-curl http://localhost:3001/health
-curl http://localhost:3002/health
-
-
-7. ESTRUTURA DE DOCKERFILES
-
-7.1 Padrão usado (multi-stage seria overkill):
-
-```dockerfile
-FROM node:18                       # Imagem base confiável
-
-WORKDIR /app                       # Diretório de trabalho
-
-COPY package*.json ./              # Copia package.json e package-lock.json
-RUN npm install                    # Instala dependências
-
-COPY . .                           # Copia código fonte
-
-EXPOSE 3001                        # Documenta porta (informativo)
-
-CMD ["node", "index.js"]           # Comando de inicialização
-```
-
-7.2 Alternativas consideradas:
-- Multi-stage build: Não necessário (não há dependências de build)
-- Docker slim: Overkill para projeto educacional
-- Alpine linux: Trade-off: menos 20MB size mas mais complexo
-
-Decisão: Usar node:18 base simples
-
-
-====== FIM DO ADR-003 ======
+Comandos basicos:
+- docker compose up
+- docker compose up --build
+- docker compose down
+- docker compose down -v
+- docker compose ps
+- docker compose logs -f

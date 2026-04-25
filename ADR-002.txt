@@ -1,143 +1,69 @@
-ADR-002: IMPLEMENTAR LOGGING ESTRUTURADO COM CORRELATION IDs
+ADR-002: IMPLEMENTAR LOGGING ESTRUTURADO COM CORRELATION IDS
 
 Status: ACEITO
 Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
----
+1. Contexto
 
-1. CONTEXTO
+O fluxo de requisicoes abrange varios servicos: UI Service, Demand Service, Deadline Checker Service e Email Service.
+Quando um erro acontece, precisamos saber qual servico participou daquela operacao.
 
-Requisição passa por UI Service → Demand Service → Deadline Checker Service → Email Service. Se erro em qualquer ponto, como correlacionar logs entre serviços?
+2. Alternativas consideradas
 
-Logs estão separados por container. Correlation ID único viaja por todos serviços para rastrear fluxo completo.
-
-2. ALTERNATIVAS CONSIDERADAS
-
-ALTERNATIVA A: Logging estruturado com Correlation ID - ESCOLHIDA
-
-Como funciona:
-- Gera UUID único por requisição inicial
-- Propaga via header X-Correlation-ID
-- Logs JSON incluem correlationId, service, method, url, timestamp
-
-Exemplo log:
-{
-  "service": "demand-service",
-  "correlationId": "abc123",
-  "method": "POST",
-  "url": "/demands",
-  "timestamp": "2026-04-24T16:00:00.000Z"
-}
+Alternativa A: logging estruturado com Correlation ID - escolhido
+- Gera um UUID unico por requisicao.
+- Propaga o valor no header X-Correlation-ID.
+- Registra logs em JSON com correlationId, service, method, url e timestamp.
 
 Vantagens:
-✓ Rastreabilidade completa do fluxo
-✓ JSON estruturado para ferramentas
-✓ Sem ferramentas extras necessárias
-✓ Escalável para ELK/Datadog futuramente
+- Facil de rastrear o fluxo entre servicos.
+- Funciona sem infra extra.
+- Permite buscar logs relacionados a mesma operacao.
 
 Desvantagens:
-- Logs stdout (perdem se container morre)
-- Disciplina para sempre propagar header
+- Precisa disciplina para propagar o header.
+- Logs ainda saem pelo stdout.
 
-ALTERNATIVA B: Logging centralizado custom
+Alternativa B: log centralizado custom
+- Um servico extra recebe todos os logs.
+- Isso adiciona complexidade e nao e necessario aqui.
 
-Criar microsserviço para logs centralizados.
+Alternativa C: console.log simples
+- Facil de implementar, mas nao faz correlacao entre servicos.
 
-Vantagens:
-+ Logs centralizados desde início
-+ Dashboard visual possível
+Alternativa D: usar biblioteca de logging como Winston ou Pino
+- Poderoso, mas traz dependencias a mais e aumenta a curva de aprendizado.
 
-Desvantagens:
-- Mais complexidade desnecessária
-- Overkill para projeto educacional
+3. Decisao
 
-NÃO escolhido.
+Usar logging estruturado com Correlation IDs.
 
-ALTERNATIVA C: Logging simples (console.log plain text)
-
-Apenas console.log sem estrutura.
-
-Vantagens:
-+ Fácil implementar
-
-Desvantagens:
-- Impossível correlacionar entre serviços
-- Sem contexto temporal/serviço
-
-NÃO recomendado.
-
-ALTERNATIVA D: Biblioteca logging (Winston, Pino)
-
-Usar Winston para logging avançado.
-
-Vantagens:
-+ Profissional
-+ Múltiplos outputs/transports
-
-Desvantagens:
-- Mais dependências
-- Curva aprendizado desnecessária
-
-NÃO escolhido: console.log + JSON suficiente.
-
-3. DECISÃO
-
-USAR LOGGING ESTRUTURADO COM CORRELATION IDs
-
-Justificativa:
-Padrão da indústria. Simples, escalável. Aprender Correlation IDs agora economiza tempo em projetos futuros.
-
-4. CONSEQUÊNCIAS
+4. Consequencias
 
 Positivas:
-- Rastreamento completo de requisições
-- Debug facilitado entre serviços
-- Preparado para observabilidade avançada
+- Requisicoes podem ser rastreadas entre servicos.
+- Debug fica mais rapido.
+- O projeto ja fica pronto para observabilidade basica.
 
 Negativas:
-- Overhead mínimo de gerar UUID
-- Disciplina para propagar headers
+- Pequeno overhead de gerar o UUID.
+- E necessario propagar o header entre servicos.
 
-Mitigações:
-- Middleware automático gera/propaga correlationId
-- Logs incluem timestamp para ordenação
-- Docker Compose facilita coleta de logs
+5. Implementacao
 
-5. IMPLEMENTAÇÃO
+No Express, middleware faz:
+- ler X-Correlation-ID no request ou gerar um UUID novo.
+- guardar em req.correlationId.
+- setar X-Correlation-ID na resposta.
+- registrar um log JSON com service, correlationId, method, url e timestamp.
 
-Middleware Express:
+Quando um servico chama outro, ele inclui o header X-Correlation-ID na requisicao.
 
-app.use((req, res, next) => {
-    req.correlationId = req.headers['x-correlation-id'] || uuidv4();
-    res.set('x-correlation-id', req.correlationId);
+6. Validacao e testes
 
-    console.log(JSON.stringify({
-        service: "demand-service",
-        correlationId: req.correlationId,
-        method: req.method,
-        url: req.url,
-        timestamp: new Date().toISOString()
-    }));
-
-    next();
-});
-
-Ao chamar serviço:
-axios.get('http://demand-service:3001/demands', {
-    headers: { 'x-correlation-id': req.correlationId }
-});
-
-6. VALIDAÇÃO E TESTES
-
-Testes realizados:
-✓ Correlation ID gerado se não fornecido
-✓ Propagado entre serviços
-✓ Logs JSON válidos
-✓ Header retornado
-
-Teste manual:
-curl -H "X-Correlation-ID: meu-id-teste" http://localhost:3001/demands
-Procurar logs com "meu-id-teste" em todos serviços.
-
-====== FIM DO ADR-002 ======
+Testes feitos:
+- O correlation id e gerado quando nao existe.
+- O header e propagado entre servicos.
+- Os logs aparecem em JSON.
+- O mesmo correlation id pode ser encontrado em varios servicos.

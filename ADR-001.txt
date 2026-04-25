@@ -1,291 +1,81 @@
-ADR-001: USAR COMUNICAÇÃO SÍNCRONA (HTTP/REST) ENTRE MICROSSERVIÇOS
+ADR-001: USAR COMUNICACAO SINCRONA (HTTP/REST) ENTRE MICROSSERVICOS
 
 Status: ACEITO
 Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
----
+1. Contexto
 
-1. CONTEXTO
+No nosso sistema de gerenciamento de demandas, o Deadline Checker precisa consultar o Demand Service para saber quais demandas estao ativas e quais prazos devem ser verificados.
 
-No sistema de gerenciamento de demandas, Deadline Checker Service precisa consultar Demand Service para obter lista de demandas ativas e verificar prazos.
+Este documento compara tres formas de integra��o entre esses servicos.
 
-Alternativas principais:
-- Síncrona: chama e espera resposta (como função normal)
-- Assíncrona: publica evento e continua (como email)
-- Banco compartilhado: ambos acessam mesmo DB
+2. Alternativas consideradas
 
-Cada opção tem prós e contras diferentes.
-
-2. ALTERNATIVAS CONSIDERADAS
-
-ALTERNATIVA A: Comunicação Síncrona (HTTP/REST) - ESCOLHIDA
-
-Como funciona:
-- Deadline Checker faz GET /demands para Demand Service
-- Espera resposta antes de processar verificações
-- Resposta é imediata ou erro
+Alternativa A: comunicacao sincrona HTTP/REST - escolhida
+- O Deadline Checker faz GET /demands no Demand Service.
+- Ele espera a resposta antes de seguir com a verificacao de prazos.
+- Em caso de erro, a verificacao nao prossegue.
 
 Vantagens:
-+ Simples: HTTP que todos conhecem
-+ Debug fácil: testar com curl
-+ Resposta rápida para verificações automáticas
-+ Sem infraestrutura extra de mensageria
+- Simples de implementar.
+- Facil de debugar com curl ou browser.
+- Nao precisa de fila ou broker extra.
+- Tem resposta imediata para cada verificacao.
 
 Desvantagens:
-- Acoplamento: se Demand cai, Deadline Checker falha
-- Cascata de falhas: indisponibilidade em Demand afeta alertas
-- Latência maior: cada verificação adiciona tempo de rede
+- Se o Demand Service falhar, o Deadline Checker nao funciona.
+- Pode haver cascata de falhas.
+- Cada chamada adiciona tempo de rede.
 
-Quando usar: respostas imediatas críticas, alta disponibilidade esperada, volume pequeno/médio
-
-ALTERNATIVA B: Comunicação Assíncrona (Message Queue)
-
-Como funciona:
-- Demand publica "demanda criada/atualizada" em fila
-- Deadline Checker consome mensagens quando consegue
-- Processamento desacoplado
+Alternativa B: comunicacao assincrona com fila
+- O Demand Service publica eventos de criacao/atualizacao.
+- O Deadline Checker consome esses eventos quando estiver disponivel.
 
 Vantagens:
-+ Desacoplamento: serviços independentes
-+ Resiliente: falha em um não para o outro
-+ Escalável: processar em lotes
+- Menos acoplamento entre servicos.
+- Melhor tolerancia a falhas temporarias.
+- Escala melhor com picos.
 
 Desvantagens:
-- Complexo: infraestrutura de fila necessária
-- Debug difícil: rastrear mensagens
-- Eventual consistência: dados não sempre atuais
-- Overhead: serialização/deserialização
+- Mais complexo de montar.
+- Debug e rastreamento ficam mais dificeis.
+- Os dados podem ficar desatualizados por um tempo.
 
-Quando usar: alta disponibilidade crítica, volume alto, tolerância a latência
-
-ALTERNATIVA C: Banco Compartilhado
-
-Como funciona:
-- Ambos serviços acessam mesma tabela de demandas
-- Deadline Checker consulta diretamente o DB
+Alternativa C: banco compartilhado
+- Ambos servicos leem do mesmo banco de demandas.
 
 Vantagens:
-+ Simples: sem comunicação entre serviços
-+ Performance: acesso direto ao DB
-+ Consistência: dados sempre atuais
+- Acesso direto aos dados.
+- Sem chamadas de rede entre servicos.
+- Consistencia imediata.
 
 Desvantagens:
-- Acoplamento forte: mudança em DB afeta ambos
-- Escalabilidade limitada: DB como gargalo
-- Monolito disfarçado: difícil evoluir separadamente
+- Alta dependencia do esquema do banco.
+- Perde-se independencia entre servicos.
+- Mais dificil evoluir cada servico separadamente.
 
-Quando usar: protótipos, sistemas pequenos, quando consistência é prioridade absoluta
+3. Decisao
 
-3. DECISÃO
+Escolhemos a alternativa A: comunicacao sincrona via HTTP/REST.
 
-Escolhemos ALTERNATIVA A (Comunicação Síncrona) porque:
+Razoes:
+- O projeto e pequeno e o volume e moderado.
+- Precisamos de verificacoes confiaveis e simples.
+- Queremos manter o projeto facil de entender e testar.
 
-- Sistema é pequeno/médio volume
-- Verificações são críticas e precisam ser confiáveis
-- Simplicidade de desenvolvimento e operação
-- Equipe já conhece HTTP/REST
-- Docker Compose facilita testes locais
-
-4. CONSEQUÊNCIAS
+4. Consequencias
 
 Positivas:
-- Desenvolvimento rápido
-- Fácil testar e debugar
-- Sem dependências externas
+- Desenvolvimento rapido.
+- Debug facil.
+- Sem dependencia de infraestrutura extra.
 
 Negativas:
-- Risco de cascata de falhas
-- Latência de rede em verificações
+- O Deadline Checker depende do Demand Service.
+- O tempo de verificacao inclui o tempo de rede.
 
-Mitigações:
-- Timeouts curtos (5s)
-- Circuit breaker pode ser adicionado futuramente
-- Health checks em Docker Compose
-- Logs estruturados com Correlation ID para rastreamento
-
-Vantagens:
-+ Desacoplado: Product pode estar down
-+ Resiliente: mensagens ficam na fila
-+ Escalável: fila absorve picos
-
-Desvantagens:
-- Complexo: precisa infraestrutura de mensageria
-- Debug difícil: mensagens invisíveis
-- Latência maior: processamento não imediato
-
-Quando usar: processamento em background, alta resiliência, volume alto
-
-
-ALTERNATIVA C: Bancos de dados compartilhados
-
-Como funciona:
-- Ambos serviços acessam mesmo banco
-- Order lê produtos diretamente da tabela
-
-Vantagens:
-+ Sem latência de rede
-+ Dados sempre consistentes
-
-Desvantagens:
-- Viola microsserviços: não independentes
-- Evolução difícil: mudança em produtos quebra Order
-- Sem isolamento: falha em um afeta outro
-
-NÃO recomendado: como monolito disfarçado.
-
-
-3. DECISÃO
-
-IMPLEMENTAR COMUNICAÇÃO SÍNCRONA VIA HTTP/REST
-
-Justificativa:
-Projeto educacional, simplicidade importa. HTTP/REST é padrão da indústria, fácil entender e debugar. Volume esperado pequeno, respostas imediatas fazem sentido. Aprendizado de HTTP vale mais que Kafka agora.
-
-
-4. CONSEQUÊNCIAS
-
-POSITIVAS:
-✓ Simples e fácil entender
-✓ Prototipagem rápida
-✓ Debug com ferramentas comuns
-✓ Custo operacional baixo
-
-NEGATIVAS:
-✗ Acoplamento temporal entre serviços
-✗ Latência maior em picos
-✗ Precisa timeout para evitar travamentos
-✗ Em produção alto volume, seria problema
-
-
-5. FEEDBACK DO PEER REVIEW (22/04/2026)
-
-Comentários:
-- Bom: justificativa clara
-- Sugestão: timeout no axios
-- Concordância: alternativas bem exploradas
-
-Ações tomadas:
-✓ Timeout 5s no axios (order-service)
-✓ Logging de erro melhor
-✓ Documentado retry futuro
-
-
-ALTERNATIVA B: Comunicação Assíncrona (Message Queue)
-
-Como funciona:
-- Order publica mensagem em fila
-- Responde cliente imediatamente
-- Product processa depois
-
-Vantagens:
-+ Desacoplado e resiliente
-+ Escalável
-
-Desvantagens:
-- Mais complexo
-- Debug difícil
-
-Quando usar: processamento background, alta resiliência
-
-
-ALTERNATIVA C: Banco compartilhado
-
-Como funciona:
-- Ambos acessam mesmo DB
-
-Vantagens:
-+ Sem latência rede
-
-Desvantagens:
-- Viola microsserviços
-- Sem isolamento
-
-NÃO recomendado.
-
-
-3. DECISÃO
-
-Usar síncrona HTTP/REST
-
-Justificativa:
-Projeto educacional, simplicidade. HTTP padrão indústria. Volume pequeno, respostas imediatas.
-
-
-4. CONSEQUÊNCIAS
-
-Positivas:
-✓ Simples
-✓ Fácil debug
-✓ Prototipagem rápida
-
-Negativas:
-✗ Acoplamento
-✗ Latência maior
-
-
-5. FEEDBACK PEER REVIEW
-
-Comentários:
-- Justificativa clara
-- Sugestão timeout
-
-Ações:
-✓ Timeout 5s no axios
-✓ Logging melhor
-2. Simplicidade: Tanto Express.js quanto Axios fazem isso trivialmente
-3. Observabilidade: HTTP é fácil de monitorar com ferramentas padrão
-4. Escopo do projeto: Volume esperado não justifica complexidade de filas
-5. Fase educacional: Melhor foco em conceitos fundamentais antes de 
-   padrões avançados
-
-
-4. CONSEQUÊNCIAS
-
-4.1 Positivas
-- Implementação rápida e direta ✓
-- Código legível e mantível ✓
-- Fácil testar com ferramentas HTTP ✓
-- Debugging simplificado ✓
-- Requisições são rastreáveis com Correlation IDs ✓
-
-4.2 Negativas
-- Se Product Service cair, Order Service não consegue criar pedidos ✗
-- Latência de rede é adicionada ao tempo de criação de pedido ✗
-- Sob alta carga, gargalo pode ser rate limiting de conexões ✗
-
-4.3 Mitigações Implementadas
-✓ Health checks: Ambos serviços expõem /health para monitoramento
-✓ Correlation ID: Rastreamento de requisições entre serviços
-✓ Logging estruturado: Facilita debugging de falhas
-✓ Docker Compose: Garante ambos rodem juntos em desenvolvimento
-
-4.4 Mitigações Futuras Recomendadas
-- Implementar Circuit Breaker (biblioteca opossum)
-- Retry com backoff exponencial (exponential backoff)
-- Timeout configurável em requisições HTTP
-- Implementar caching de produtos em Order Service
-- Considerar migração para async se volume crescer
-
-
-5. VALIDAÇÃO E TESTES
-
-Teste manual realizado:
-- Order Service consegue chamar Product Service via HTTP ✓
-- Correlation ID é propagado corretamente ✓
-- Ambos os serviços respondent dentro de latência aceitável ✓
-- Health checks funcionam para ambos ✓
-
-Comandos de teste:
-```bash
-# Testar Product Service
-curl http://localhost:3001/products -H "X-Correlation-ID: test-123"
-
-# Testar criação de Order
-curl -X POST http://localhost:3002/orders \
-  -H "Content-Type: application/json" \
-  -H "X-Correlation-ID: test-123" \
-  -d '{}'
-```
-
-====== FIM DO ADR-001 ======
+Mitigacoes:
+- Timeout de 5s nas chamadas HTTP.
+- Health checks para cada servico.
+- Correlation ID para rastrear requisicoes entre servicos.

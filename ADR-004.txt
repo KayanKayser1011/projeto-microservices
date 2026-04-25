@@ -1,112 +1,58 @@
-ADR-004: USAR SQLITE PARA PERSISTÊNCIA DE LOGS NO DEADLINE CHECKER SERVICE
+ADR-004: USAR SQLITE PARA PERSISTENCIA DE LOGS NO DEADLINE CHECKER SERVICE
 
 Status: ACEITO
 Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
----
+1. Contexto
 
-1. CONTEXTO
+O Deadline Checker Service precisa guardar historico de verificacoes e alertas.
+O armazenamento deve sobreviver a reinicios e ser facil de consultar.
 
-O Deadline Checker Service precisa armazenar logs de verificações e alertas enviados. Como persistir dados estruturados de forma simples e confiável em container?
+2. Alternativas consideradas
 
-Requisitos: persistência entre restarts, consultas rápidas, estrutura relacional, fácil backup, sem dependências externas.
-
-2. ALTERNATIVAS CONSIDERADAS
-
-ALTERNATIVA A: SQLite com better-sqlite3 - ESCOLHIDA
-
-Arquivo SQLite local no container, com volume Docker para persistência.
+Alternativa A: SQLite com better-sqlite3 - escolhido
+- Usa um arquivo local dentro do container.
+- Um volume Docker garante persistencia entre reinicios.
+- Suporta SQL para consultas e transacoes.
 
 Vantagens:
-✓ Zero configuração: arquivo único
-✓ SQL completo: consultas complexas
-✓ Transações ACID: dados consistentes
-✓ Volume Docker: sobrevive restarts
-✓ Sem servidor: não precisa gerenciar
-✓ Backup simples: copiar arquivo
+- Zero configuracao.
+- Backup facil.
+- Relacional, simples de usar.
 
 Desvantagens:
-- Concorrência limitada: um writer por vez
-- Não distribuído: dados locais ao container
+- Concorrencia limitada.
+- Dados locais ao container.
 
-ALTERNATIVA B: PostgreSQL/MySQL separado
+Alternativa B: PostgreSQL ou MySQL
+- Mais poderoso, mas adiciona um container extra.
+- Mais complexidade sem necessidade para logs simples.
 
-Container dedicado de banco de dados.
+Alternativa C: arquivos JSON ou CSV
+- Muito facil, mas sem transacoes e ruim para consultas.
 
-Vantagens:
-+ Concorrência alta
-+ Distribuição possível
-+ Ferramentas avançadas
+Alternativa D: Redis ou Memcached
+- R�pido, mas dados podem ser volateis e pouco flexiveis.
 
-Desvantagens:
-- Mais complexidade: gerenciar 2 containers
-- Recursos extras: CPU/RAM para DB
-- Setup mais lento: inicialização sequencial
-- Overkill para logs simples
+3. Decisao
 
-NÃO escolhido: complexidade desnecessária.
+Usar SQLite com better-sqlite3 para guardar logs do Deadline Checker.
 
-ALTERNATIVA C: Arquivos JSON/CSV
-
-Salvar logs em arquivos texto.
-
-Vantagens:
-+ Simples implementar
-+ Legível humano
-
-Desvantagens:
-- Consultas limitadas: grep/sed
-- Sem transações: risco de corrupção
-- Performance ruim com muitos logs
-- Sem relacionamentos
-
-NÃO recomendado: não escalável.
-
-ALTERNATIVA D: Redis/Memcached
-
-Cache em memória com persistência opcional.
-
-Vantagens:
-+ Performance alta
-+ Estruturas de dados ricas
-
-Desvantagens:
-- Dados voláteis por padrão
-- Não relacional: difícil consultas
-- Dependência externa
-
-NÃO adequado: dados precisam persistir.
-
-3. DECISÃO
-
-USAR SQLITE COM BETTER-SQLITE3 PARA LOGS
-
-Justificativa:
-SQLite é perfeito para dados locais estruturados. better-sqlite3 oferece performance e API síncrona ideal para Node.js. Volume Docker garante persistência.
-
-4. CONSEQUÊNCIAS
+4. Consequencias
 
 Positivas:
-- Persistência confiável de logs
-- Consultas SQL para análise
-- Backup/restauração simples
-- Sem dependências externas
+- Persistencia fiavel.
+- Consultas SQL.
+- Backup facil.
 
 Negativas:
-- Concorrência limitada (não problema aqui)
-- Dados locais ao container
+- Concorrencia limitada.
+- Nao distribuido.
 
-Mitigações:
-- Volume Docker nomeado
-- Estrutura de tabelas bem definida
-- Índices para performance
+5. Implementacao
 
-5. IMPLEMENTAÇÃO
-
-Schema SQLite:
-
-```sql
+Schema:
 CREATE TABLE check_logs (
     id TEXT PRIMARY KEY,
     demand_id TEXT,
@@ -128,13 +74,5 @@ CREATE TABLE alert_logs (
     sent_at TEXT,
     correlation_id TEXT
 );
-```
 
-Docker Compose volume:
-```yaml
-volumes:
-  deadline-checker-data:
-    driver: local
-```
-
-====== FIM DO ADR-004 ======
+Docker Compose inclui o volume deadline-checker-data para armazenar o arquivo deadline-checker.db.

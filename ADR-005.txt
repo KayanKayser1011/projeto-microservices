@@ -1,124 +1,57 @@
-ADR-005: USAR INTERFACE WEB ESTÁTICA SERVIDA POR EXPRESS
+ADR-005: USAR INTERFACE WEB ESTATICA SERVIDA POR EXPRESS
 
 Status: ACEITO
 Data: 24/04/2026
 Autor: Equipe de Desenvolvimento
 
----
+1. Contexto
 
-1. CONTEXTO
+Queremos uma interface de usuario simples para criar e ver demandas, forcar verificacoes e ver logs.
+A ideia e manter a interface leve e facil de manter.
 
-Como fornecer interface para usuários interagirem com o sistema de demandas? Precisa ser simples, rápido de desenvolver, sem dependências pesadas.
+2. Alternativas consideradas
 
-Requisitos: visualizar demandas, criar/editar, forçar verificações, ver logs resumidos, responsivo.
+Alternativa A: HTML/CSS/JS estatico servido por Express - escolhido
+- Usa arquivos estaticos simples.
+- Nao precisa de framework pesado.
+- So precisa de Express para servir os arquivos.
 
-2. ALTERNATIVAS CONSIDERADAS
+Alternativa B: React, Vue ou Angular
+- Muito mais trabalho e depende de build.
+- Overkill para uma interface simples.
 
-ALTERNATIVA A: HTML/CSS/JS estático servido por Express - ESCOLHIDA
+Alternativa C: motor de template como EJS ou Pug
+- Poderia funcionar, mas mistura frontend e backend.
+- Menos interatividade do lado do cliente.
 
-Arquivos estáticos servidos por microsserviço dedicado.
+Alternativa D: framework CSS como Bootstrap ou Tailwind
+- Da estilo rapido, mas adiciona dependencias.
+- Nao e necessario para este projeto.
 
-Vantagens:
-✓ Simples: HTML/CSS/JS puro
-✓ Rápido desenvolvimento: sem frameworks
-✓ Sem dependências: apenas Express
-✓ Leve: poucos KB
-✓ Fácil manutenção
-✓ Funciona offline
+3. Decisao
 
-Desvantagens:
-- Sem componentes reutilizáveis
-- JavaScript vanilla limitado
+Usar HTML/CSS/JS estatico servido por Express.
 
-ALTERNATIVA B: React/Vue/Angular SPA
-
-Framework JavaScript moderno com build.
-
-Vantagens:
-+ Componentes reutilizáveis
-+ Ecossistema rico
-+ Developer experience
-+ Performance otimizada
-
-Desvantagens:
-- Build complexo: webpack/vite
-- Dependências pesadas: node_modules
-- Curva aprendizado
-- Overkill para interface simples
-
-NÃO escolhido: complexidade desnecessária.
-
-ALTERNATIVA C: Template engine (EJS/Pug)
-
-Renderizar HTML no servidor.
-
-Vantagens:
-+ Lógica no backend
-+ SEO melhor
-+ Sem JavaScript no cliente
-
-Desvantagens:
-- Estado no servidor complexo
-- Não responsivo a mudanças
-- Mistura frontend/backend
-
-NÃO adequado: interface interativa.
-
-ALTERNATIVA D: Framework CSS (Bootstrap/Tailwind)
-
-Biblioteca de estilos pronta.
-
-Vantagens:
-+ Aparência profissional rápida
-+ Responsivo automático
-+ Componentes prontos
-
-Desvantagens:
-- Dependências externas
-- Personalização limitada
-- Bundle maior
-
-NÃO primário: CSS custom suficiente.
-
-3. DECISÃO
-
-USAR HTML/CSS/JS ESTÁTICO SERVIDO POR EXPRESS
-
-Justificativa:
-Interface simples não precisa de frameworks pesados. HTML/CSS/JS puro é suficiente, rápido de desenvolver e manter.
-
-4. CONSEQUÊNCIAS
+4. Consequencias
 
 Positivas:
-- Desenvolvimento rápido
-- Sem dependências
-- Leve e performático
-- Fácil debug
+- Rapido de desenvolver.
+- Leve e facil de manter.
+- Funciona em qualquer navegador.
 
 Negativas:
-- Sem hot reload
-- JavaScript limitado
+- Menos recursos prontos do que um framework moderno.
+- Sem hot reload automatico.
 
-Mitigações:
-- Estrutura organizada
-- Funções modulares
-- CSS responsivo custom
+5. Implementacao
 
-5. IMPLEMENTAÇÃO
+O UI Service tem:
+- index.js como servidor Express.
+- public/index.html para a pagina.
+- public/app.js para a logica do cliente.
 
-Estrutura:
-```
-ui-service/
-├── index.js          # Servidor Express
-├── public/
-│   ├── index.html    # Interface principal
-│   └── app.js        # Lógica JavaScript
-└── Dockerfile        # Container leve
-```
-
-API calls via fetch():
-- fetch('/demands') para listar
-- fetch('/demands', POST) para criar
-- fetch('/logs') para dados
-
-====== FIM DO ADR-005 ======
+O frontend faz chamadas fetch para os outros servicos:
+- GET /demands para listar demandas
+- POST /demands para criar demandas
+- POST /check-deadlines para forcar a verificacao
+- GET /logs para ver historico
