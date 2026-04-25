@@ -120,6 +120,17 @@ curl http://localhost:3001/demands
   - 3 dias restantes: alertas diários para demandas sem tratativa
 - **Status**: PENDENTE → EM_TRATATIVA → FINALIZADA
 
+## SLA e SLOs
+
+O serviço de gerenciamento de demandas tem as seguintes metas de confiabilidade e desempenho:
+
+- SLA: 99% de disponibilidade mensal para os endpoints principais (`/health`, `/demands`, `/check-deadlines`, `/send-alert`).
+- SLO: 99% de sucesso nas respostas dos endpoints críticos em 30 dias.
+- SLO: 95% das requisições ao Demand Service (`/demands`) retornam em até 500ms.
+- SLO: `/health` responde com `status: UP` em até 300ms em 99,9% das verificações.
+- SLO: o Deadline Checker executa seu ciclo horário com atraso máximo de 5 minutos.
+- SLO: o Email Service processa alertas simulados em até 1 minuto após a detecção de prazo crítico.
+
 ## Comunicação entre Serviços
 
 ```
@@ -137,7 +148,7 @@ Protocolo: HTTP/REST, JSON, Correlation ID no header X-Correlation-ID
 
 ## Documentação
 
-- **ARQUITETURA.txt**: Document completo de arquitetura, SLOs, observabilidade e segurança
+- **ARQUITETURA.txt**: Documento completo de arquitetura, SLA/SLOs, observabilidade e segurança
 - **ADR-001.txt**: Por que usar HTTP/REST em vez de mensageria assíncrona
 - **ADR-002.txt**: Por que implementar Correlation IDs para rastreamento
 - **ADR-003.txt**: Por que usar Docker Compose em vez de Kubernetes

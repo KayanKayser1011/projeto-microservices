@@ -39,7 +39,20 @@ UI Service: responsavel pela interface web.
 - Serve HTML/CSS/JS para o navegador.
 - Faz chamadas a cada servico para mostrar dados.
 
-4. Observabilidade
+4. SLA e SLOs
+
+O projeto trata a aplicacao como um servico de gerenciamento de demandas. As metas de nivel de servico ajudam a garantir disponibilidade e tempo de resposta nas funcionalidades principais.
+
+- SLA: Disponibilidade de 99% por mes para os endpoints de saude e operacao critica do sistema, incluindo `/health`, `/demands`, `/check-deadlines` e `/send-alert`.
+- SLO: 99% de sucesso nas respostas dos endpoints principais em um periodo de 30 dias.
+- SLO: 95% das requisicoes aos endpoints do Demand Service (`/demands`) retornam em ate 500ms.
+- SLO: O endpoint `/health` responde com `status: UP` em até 300ms em 99,9% das verificacoes.
+- SLO: O Deadline Checker executa seu ciclo horario com no maximo 5 minutos de atraso.
+- SLO: O Email Service simula processamento de alertas em ate 1 minuto apos a deteccao de uma demanda critico.
+
+Estas metas estimam um comportamento aceitavel para um servico de gerenciamento de demandas em ambiente de desenvolvimento e testes.
+
+5. Observabilidade
 
 Usamos logging estruturado com Correlation ID para rastrear uma operacao em varios servicos.
 Cada request pode carregar um header X-Correlation-ID.
@@ -49,7 +62,7 @@ Isso ajuda a saber se o container esta funcionando.
 
 O Deadline Checker guarda logs em SQLite para poder consultar historico de verificacoes e alertas.
 
-5. Seguranca basica
+6. Seguranca basica
 
 No ambiente de desenvolvimento usamos HTTP.
 Para producao, seria necessario HTTPS ou mTLS.
@@ -57,14 +70,14 @@ Para producao, seria necessario HTTPS ou mTLS.
 A entrada de dados deve ser validada no backend.
 O projeto ainda nao tem autenticacao ou autorizacao.
 
-6. Padrões usados
+7. Padrões usados
 
 - Comunicacao: REST sincronico.
 - Servicos stateless quando possivel.
 - Persistencia de logs com SQLite e volume Docker.
 - Orquestracao local com Docker Compose.
 
-7. Estrutura do projeto
+8. Estrutura do projeto
 
 projeto-microservices/
 - docker-compose.yml
@@ -79,7 +92,7 @@ projeto-microservices/
 - ADR-005.txt
 - ARQUITETURA.txt
 
-8. Como usar
+9. Como usar
 
 Para rodar tudo localmente:
 - docker compose up --build
