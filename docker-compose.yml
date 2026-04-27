@@ -9,10 +9,13 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
+    volumes:
+      - demand-service-data:/app/data
     networks:
       - microservices-net
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+
       interval: 10s
       timeout: 5s
       retries: 3
@@ -86,9 +89,12 @@ services:
     networks:
       - microservices-net
     depends_on:
-      - demand-service
-      - deadline-checker-service
-      - email-service
+      demand-service:
+        condition: service_healthy
+      deadline-checker-service:
+        condition: service_healthy
+      email-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
       interval: 10s
@@ -102,5 +108,7 @@ networks:
     driver: bridge
 
 volumes:
+  demand-service-data:
+    driver: local
   deadline-checker-data:
     driver: local

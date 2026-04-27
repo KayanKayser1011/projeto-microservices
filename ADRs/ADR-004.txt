@@ -33,11 +33,11 @@ Alternativa C: arquivos JSON ou CSV
 - Muito facil, mas sem transacoes e ruim para consultas.
 
 Alternativa D: Redis ou Memcached
-- R�pido, mas dados podem ser volateis e pouco flexiveis.
+- R�pido, mas dados podem ser volateis e pouco flexiveis.
 
 3. Decisao
 
-Usar SQLite com better-sqlite3 para guardar logs do Deadline Checker.
+Usar SQLite com better-sqlite3 para guardar dados do Demand Service e logs do Deadline Checker Service.
 
 4. Consequencias
 
@@ -50,29 +50,16 @@ Negativas:
 - Concorrencia limitada.
 - Nao distribuido.
 
-5. Implementacao
+5. Mitigacao
 
-Schema:
-CREATE TABLE check_logs (
-    id TEXT PRIMARY KEY,
-    demand_id TEXT,
-    title TEXT,
-    status TEXT,
-    deadline TEXT,
-    days_remaining INTEGER,
-    alert_type TEXT,
-    message TEXT,
-    checked_at TEXT,
-    correlation_id TEXT
-);
+Mitigacoes implementadas em desenvolvimento:
+- ✅ SQLite com melhor-sqlite3 (single-threaded) sendo usado em ambos os servicos.
+- ✅ Volumes Docker garantem persistencia de demands.db e deadline-checker.db entre reinicializacoes.
+- ✅ Uma unica instancia de cada servico rodando (conforme esperado em desenvolvimento).
 
-CREATE TABLE alert_logs (
-    id TEXT PRIMARY KEY,
-    demand_id TEXT,
-    type TEXT,
-    message TEXT,
-    sent_at TEXT,
-    correlation_id TEXT
-);
+Mitigacoes propostas para producao (nao implementadas neste projeto educacional):
+- Migrar para PostgreSQL ou MongoDB para suportar acesso concorrente de multiplas instancias.
+- Implementar retry logic com timeout nas queries para evitar locks prolongados.
+- Usar WAL (Write-Ahead Logging) mode do SQLite para melhorar concorrencia em ambiente local.
+- Backup automatico dos arquivos .db diariamente para evitar perda de dados.
 
-Docker Compose inclui o volume deadline-checker-data para armazenar o arquivo deadline-checker.db.

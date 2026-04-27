@@ -152,7 +152,7 @@ Protocolo: HTTP/REST, JSON, Correlation ID no header X-Correlation-ID
 - **ADR-001.txt**: Por que usar HTTP/REST em vez de mensageria assíncrona
 - **ADR-002.txt**: Por que implementar Correlation IDs para rastreamento
 - **ADR-003.txt**: Por que usar Docker Compose em vez de Kubernetes
-- **ADR-004.txt**: Por que usar SQLite para persistência de logs
+- **ADR-004.txt**: Por que usar SQLite para persistência de dados (Demand Service) e logs (Deadline Checker)
 - **ADR-005.txt**: Por que usar interface web estática
 - **PEER_REVIEW_CHECKLIST.txt**: Checklist de avaliação preenchido
 

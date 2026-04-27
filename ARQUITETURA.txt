@@ -26,10 +26,11 @@ Todos os servicos usam JSON no corpo das requisicoes.
 Demand Service: responsavel pelos dados das demandas.
 - Campos: id, title, description, status, deadline, createdAt.
 - Controle completo de CRUD.
+- Persistencia com SQLite em volume Docker (stateless).
 
 Deadline Checker Service: responsavel por verificar prazos.
-- Usa os dados do Demand Service.
-- Salva logs de verificacao e alertas em SQLite.
+- Usa os dados do Demand Service via HTTP.
+- Salva logs de verificacao e alertas em SQLite com volume Docker (stateless).
 
 Email Service: responsavel por enviar emails.
 - Recebe pedidos de alerta do Deadline Checker.
@@ -60,7 +61,10 @@ Cada request pode carregar um header X-Correlation-ID.
 Health checks estao disponiveis em /health para cada servico.
 Isso ajuda a saber se o container esta funcionando.
 
-O Deadline Checker guarda logs em SQLite para poder consultar historico de verificacoes e alertas.
+Persistencia de dados:
+- O Demand Service persiste dados de demandas em SQLite para CRUD (Create, Read, Update, Delete).
+- O Deadline Checker persiste logs de verificacoes e alertas em SQLite para consulta de historico.
+Ambos usam volumes Docker para garantir dados persistentes mesmo apos reinicializacao.
 
 6. Seguranca basica
 
@@ -73,8 +77,8 @@ O projeto ainda nao tem autenticacao ou autorizacao.
 7. Padrões usados
 
 - Comunicacao: REST sincronico.
-- Servicos stateless quando possivel.
-- Persistencia de logs com SQLite e volume Docker.
+- Servicos sempre stateless (estado persistido em SQLite ou exterior).
+- Persistencia de dados e logs com SQLite e volume Docker.
 - Orquestracao local com Docker Compose.
 
 8. Estrutura do projeto

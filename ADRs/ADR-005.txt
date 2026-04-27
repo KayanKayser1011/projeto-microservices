@@ -43,15 +43,12 @@ Negativas:
 - Menos recursos prontos do que um framework moderno.
 - Sem hot reload automatico.
 
-5. Implementacao
+5. Mitigacao
 
-O UI Service tem:
-- index.js como servidor Express.
-- public/index.html para a pagina.
-- public/app.js para a logica do cliente.
+Mitigacoes para limitacoes de interface estatica:
+- Implementar cache HTTP (Cache-Control headers) para reduzir carga no servidor.
+- Usar Content Delivery Network (CDN) em producao para servir arquivos estaticos de forma distribuida.
+- Adicionar validacao de entrada no lado do cliente (JavaScript) para reduzir requisicoes invalidas ao backend.
+- Implementar Service Worker para funcionalidade offline e sincronizacao de dados quando conexao e recuperada.
+- Em producao, usar framework moderno (React/Vue) com build otimizado se mais features forem necessarias.
 
-O frontend faz chamadas fetch para os outros servicos:
-- GET /demands para listar demandas
-- POST /demands para criar demandas
-- POST /check-deadlines para forcar a verificacao
-- GET /logs para ver historico

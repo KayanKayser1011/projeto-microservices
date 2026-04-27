@@ -25,6 +25,7 @@ Desvantagens:
 - Nao e solucao de producao completa.
 - Um host apenas.
 - Sem auto healing e sem load balancing avancado.
+- Multiplas instancias do mesmo container causariam conflitos no banco de dados SQLite compartilhado (deadline-checker.db), ja que SQLite nao foi projetado para acesso concorrente em escala de producao.
 
 Alternativa B: Kubernetes
 - Muito mais complexo.
@@ -50,21 +51,16 @@ Positivas:
 Negativas:
 - Nao e o mesmo que um ambiente de producao.
 - Fica limitado a uma maquina.
+- Nao permite escalabilidade horizontal de instancias.
 
-5. Implementacao
+Apesar da falta de escalabilidade e das limitacoes do SQLite com multiplas instancias, esta decisao foi apropriada para o escopo do projeto educacional e ambiental de desenvolvimento.
 
-O docker-compose define:
-- demand-service na porta 3001.
-- deadline-checker-service na porta 3002 com volume para logs.
-- email-service na porta 3003 com variaveis SMTP.
-- ui-service na porta 3000.
+5. Mitigacao
 
-O deadline-checker depende do demand-service e do email-service.
+Mitigacoes para limitacoes de producao:
+- Para producao, migrar para Kubernetes com load balancing e StatefulSet para deadline-checker.
+- Implementar retry logic com exponential backoff nas chamadas HTTP entre servicos para lidar com falhas temporarias.
+- Usar volumes persistentes (PersistentVolume) para dados criticos ao inves de volumes locais do Docker Compose.
+- Implementar health checks avancados (liveness e readiness probes) em cada container.
+- Para multiplas instancias, substituir SQLite por PostgreSQL compartilhado entre replicas do deadline-checker.
 
-Comandos basicos:
-- docker compose up
-- docker compose up --build
-- docker compose down
-- docker compose down -v
-- docker compose ps
-- docker compose logs -f

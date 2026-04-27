@@ -50,20 +50,11 @@ Negativas:
 - Pequeno overhead de gerar o UUID.
 - E necessario propagar o header entre servicos.
 
-5. Implementacao
+5. Mitigacao
 
-No Express, middleware faz:
-- ler X-Correlation-ID no request ou gerar um UUID novo.
-- guardar em req.correlationId.
-- setar X-Correlation-ID na resposta.
-- registrar um log JSON com service, correlationId, method, url e timestamp.
+Mitigacoes implementadas para lidar com os riscos:
+- UUID e gerado em memoria sem disco I/O, minimizando overhead.
+- Middleware propaga o header automaticamente a cada requisicao, eliminando risco de esquecimento.
+- Logs JSON sao padronizados para garantir que todos os servicos registrem correlationId consistentemente.
+- Em producao, usar um sistema de logging centralizado (ELK, Datadog) para armazenar logs com correlationId.
 
-Quando um servico chama outro, ele inclui o header X-Correlation-ID na requisicao.
-
-6. Validacao e testes
-
-Testes feitos:
-- O correlation id e gerado quando nao existe.
-- O header e propagado entre servicos.
-- Os logs aparecem em JSON.
-- O mesmo correlation id pode ser encontrado em varios servicos.

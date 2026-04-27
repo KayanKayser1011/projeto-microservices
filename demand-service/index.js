@@ -1,11 +1,33 @@
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-let demands = [];
+// Initialize SQLite database
+const dataDir = path.resolve(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const db = new Database(path.join(dataDir, 'demands.db'));
+
+// Create demands table if it doesn't exist
+db.prepare(`
+    CREATE TABLE IF NOT EXISTS demands (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        deadline TEXT NOT NULL,
+        correlationId TEXT
+    )
+`).run();
 
 app.use(cors());
 app.use(express.json());
@@ -145,7 +167,8 @@ app.get('/', (req, res) => {
                     <p>
                         <strong>Fase:</strong> Desenvolvimento Local<br>
                         <strong>Stack:</strong> Node.js + Express<br>
-                        <strong>Porta:</strong> 3001
+                        <strong>Porta:</strong> 3001<br>
+                        <strong>Persistência:</strong> SQLite (Stateless)
                     </p>
                 </div>
             </div>
@@ -165,61 +188,102 @@ app.post('/demands', (req, res) => {
         return res.status(400).json({ error: 'Title and description are required' });
     }
 
-    const createdAt = new Date();
-    const deadline = calculateBusinessDays(createdAt, 10);
+    const id = uuidv4();
+    const createdAt = new Date().toISOString();
+    const deadline = calculateBusinessDays(new Date(), 10).toISOString();
+    const status = 'PENDENTE';
+    const correlationId = req.correlationId;
 
-    const demand = {
-        id: uuidv4(),
-        title,
-        description,
-        status: 'PENDENTE',
-        createdAt,
-        deadline,
-        correlationId: req.correlationId
-    };
+    try {
+        db.prepare(`
+            INSERT INTO demands (id, title, description, status, createdAt, deadline, correlationId)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, title, description, status, createdAt, deadline, correlationId);
 
-    demands.push(demand);
+        const demand = {
+            id,
+            title,
+            description,
+            status,
+            createdAt,
+            deadline,
+            correlationId
+        };
 
-    res.status(201).json(demand);
+        res.status(201).json(demand);
+    } catch (error) {
+        console.error('Error creating demand:', error.message);
+        res.status(500).json({ error: 'Failed to create demand' });
+    }
 });
 
 app.get('/demands', (req, res) => {
-    res.json(demands);
+    try {
+        const demands = db.prepare(`SELECT * FROM demands`).all();
+        res.json(demands);
+    } catch (error) {
+        console.error('Error fetching demands:', error.message);
+        res.status(500).json({ error: 'Failed to fetch demands' });
+    }
 });
 
 app.patch('/demands/:id', (req, res) => {
     const { id } = req.params;
-    const demand = demands.find(item => item.id === id);
-
-    if (!demand) {
-        return res.status(404).json({ error: 'Demanda não encontrada' });
-    }
-
     const { title, description, status, deadline } = req.body;
 
-    if (title) demand.title = title;
-    if (description) demand.description = description;
-    if (status) demand.status = status;
-    if (deadline) demand.deadline = new Date(deadline);
+    try {
+        const demand = db.prepare(`SELECT * FROM demands WHERE id = ?`).get(id);
 
-    res.json(demand);
+        if (!demand) {
+            return res.status(404).json({ error: 'Demanda não encontrada' });
+        }
+
+        const updatedTitle = title || demand.title;
+        const updatedDescription = description || demand.description;
+        const updatedStatus = status || demand.status;
+        const updatedDeadline = deadline || demand.deadline;
+
+        db.prepare(`
+            UPDATE demands SET title = ?, description = ?, status = ?, deadline = ?
+            WHERE id = ?
+        `).run(updatedTitle, updatedDescription, updatedStatus, updatedDeadline, id);
+
+        const updated = {
+            ...demand,
+            title: updatedTitle,
+            description: updatedDescription,
+            status: updatedStatus,
+            deadline: updatedDeadline
+        };
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Error updating demand:', error.message);
+        res.status(500).json({ error: 'Failed to update demand' });
+    }
 });
 
 app.delete('/demands/:id', (req, res) => {
     const { id } = req.params;
-    const demandIndex = demands.findIndex(item => item.id === id);
 
-    if (demandIndex === -1) {
-        return res.status(404).json({ error: 'Demanda não encontrada' });
+    try {
+        const demand = db.prepare(`SELECT * FROM demands WHERE id = ?`).get(id);
+
+        if (!demand) {
+            return res.status(404).json({ error: 'Demanda não encontrada' });
+        }
+
+        if (demand.status !== 'FINALIZADA') {
+            return res.status(400).json({ error: 'Só é possível apagar demandas finalizadas' });
+        }
+
+        db.prepare(`DELETE FROM demands WHERE id = ?`).run(id);
+
+        res.json({ message: 'Demanda finalizada apagada com sucesso' });
+    } catch (error) {
+        console.error('Error deleting demand:', error.message);
+        res.status(500).json({ error: 'Failed to delete demand' });
     }
-
-    const demand = demands[demandIndex];
-    if (demand.status !== 'FINALIZADA') {
-        return res.status(400).json({ error: 'Só é possível apagar demandas finalizadas' });
-    }
-
-    demands.splice(demandIndex, 1);
-    res.json({ message: 'Demanda finalizada apagada com sucesso' });
 });
 
 function calculateBusinessDays(startDate, businessDays) {
