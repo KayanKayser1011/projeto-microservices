@@ -29,10 +29,6 @@ curl http://localhost:3002/health
 curl http://localhost:3003/health
 curl http://localhost:9091
 
-# Observação
-Se você já tiver outro Prometheus rodando em `localhost:9090`, este projeto usa `localhost:9091` para não conflitar.
-```
-
 ### Variáveis de ambiente opcionais
 
 Para usar SMTP real no `email-service`, crie um arquivo `.env` com as variáveis:
