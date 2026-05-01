@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090']
+
+  - job_name: 'demand-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['demand-service:3001']
+
+  - job_name: 'deadline-checker-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['deadline-checker-service:3002']
+
+  - job_name: 'email-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['email-service:3003']

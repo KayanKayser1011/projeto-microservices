@@ -13,6 +13,7 @@
     "better-sqlite3": "^9.2.2",
     "cors": "^2.8.5",
     "express": "^5.2.1",
+    "prom-client": "^14.1.1",
     "uuid": "^8.3.2"
   }
 }

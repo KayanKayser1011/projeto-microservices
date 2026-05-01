@@ -103,6 +103,24 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - microservices-net
+    depends_on:
+      demand-service:
+        condition: service_healthy
+      deadline-checker-service:
+        condition: service_healthy
+      email-service:
+        condition: service_healthy
+    restart: unless-stopped
+
 networks:
   microservices-net:
     driver: bridge

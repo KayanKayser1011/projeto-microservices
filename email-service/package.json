@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "express": "^5.2.1",
+    "prom-client": "^14.1.1",
     "uuid": "^8.3.2",
     "nodemailer": "^6.9.7"
   }

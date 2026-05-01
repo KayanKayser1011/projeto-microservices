@@ -9,6 +9,7 @@ O sistema tem quatro servicos principais:
 - Demand Service: guarda demandas e permite cria-las, editar e apagar.
 - Deadline Checker Service: verifica prazos, calcula dias uteis e envia alertas.
 - Email Service: envia alertas de email quando necessario.
+- Prometheus: centraliza métricas de observabilidade dos serviços expostas em /metrics.
 
 Cada servico e isolado e roda em seu proprio container.
 
@@ -59,7 +60,8 @@ Usamos logging estruturado com Correlation ID para rastrear uma operacao em vari
 Cada request pode carregar um header X-Correlation-ID.
 
 Health checks estao disponiveis em /health para cada servico.
-Isso ajuda a saber se o container esta funcionando.
+Cada serviço também expõe métricas Prometheus em /metrics para monitoramento de requests e latência.
+Isso ajuda a saber se o container esta funcionando e fornece visibilidade operacional.
 
 Persistencia de dados:
 - O Demand Service persiste dados de demandas em SQLite para CRUD (Create, Read, Update, Delete).

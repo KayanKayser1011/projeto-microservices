@@ -4,9 +4,31 @@ const { v4: uuidv4 } = require('uuid');
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const client = require('prom-client');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+client.collectDefaultMetrics();
+
+const httpRequestsTotal = new client.Counter({
+    name: 'http_requests_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code', 'service']
+});
+
+const httpRequestDurationSeconds = new client.Histogram({
+    name: 'http_request_duration_seconds',
+    help: 'HTTP request duration in seconds',
+    labelNames: ['method', 'route', 'status_code', 'service'],
+    buckets: [0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 1, 2, 5]
+});
+
+const httpRequestErrorsTotal = new client.Counter({
+    name: 'http_request_errors_total',
+    help: 'Total number of HTTP requests with error status codes',
+    labelNames: ['method', 'route', 'status_code', 'service']
+});
 
 // Initialize SQLite database
 const dataDir = path.resolve(__dirname, 'data');
@@ -31,6 +53,29 @@ db.prepare(`
 
 app.use(cors());
 app.use(express.json());
+
+app.use((req, res, next) => {
+    const end = httpRequestDurationSeconds.startTimer();
+
+    res.on('finish', () => {
+        const route = req.route && req.route.path ? req.route.path : req.path;
+        const labels = {
+            method: req.method,
+            route,
+            status_code: res.statusCode,
+            service: 'demand_service'
+        };
+
+        httpRequestsTotal.inc(labels);
+        end(labels);
+
+        if (res.statusCode >= 500) {
+            httpRequestErrorsTotal.inc(labels);
+        }
+    });
+
+    next();
+});
 
 app.use((req, res, next) => {
     req.correlationId = req.headers['x-correlation-id'] || uuidv4();
@@ -179,6 +224,11 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
     res.json({ status: 'UP' });
+});
+
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
 });
 
 app.post('/demands', (req, res) => {

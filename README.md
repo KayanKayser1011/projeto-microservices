@@ -5,6 +5,7 @@ Este projeto implementa uma arquitetura de microsserviços para gestão de deman
 - **Deadline Checker Service**: verifica prazos e envia alertas por email
 - **Email Service**: envia notificações de alertas
 - **Logging estruturado**: rastreamento de requisições com Correlation IDs
+- **Observabilidade Prometheus**: métricas expostas em `/metrics`
 - **Docker Compose**: orquestração local completa
 
 ## Início Rápido
@@ -26,6 +27,10 @@ curl http://localhost:3000/health
 curl http://localhost:3001/health
 curl http://localhost:3002/health
 curl http://localhost:3003/health
+curl http://localhost:9091
+
+# Observação
+Se você já tiver outro Prometheus rodando em `localhost:9090`, este projeto usa `localhost:9091` para não conflitar.
 ```
 
 ### Variáveis de ambiente opcionais
@@ -51,6 +56,10 @@ EMAIL_TO=destino@company.com
 **GET /health**
 - Health check do serviço
 - Response: `{"status": "UP"}`
+
+**GET /metrics**
+- Prometheus metrics endpoint
+- Response: métricas em formato text/plain
 
 **POST /demands**
 - Cria uma nova demanda de problema
@@ -81,6 +90,10 @@ curl http://localhost:3001/demands
 - Health check do serviço
 - Response: `{"status": "UP"}`
 
+**GET /metrics**
+- Prometheus metrics endpoint
+- Response: métricas em formato text/plain
+
 **POST /check-deadlines**
 - Força verificação manual de prazos
 - Response: `{"message": "Deadline check completed"}`
@@ -94,6 +107,10 @@ curl http://localhost:3001/demands
 **GET /health**
 - Health check do serviço
 - Response: `{"status": "UP"}`
+
+**GET /metrics**
+- Prometheus metrics endpoint
+- Response: métricas em formato text/plain
 
 **POST /send-alert**
 - Envia alerta por email
